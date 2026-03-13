@@ -1,0 +1,38 @@
+
+[general]
+name=TUFLOW Tools
+description=Comprehensive analysis tools for TUFLOW hydraulic modeling results
+version=1.3.6
+qgisMinimumVersion=3.22
+qgisMaximumVersion=3.99
+author=Dr. Hao Wu
+email=haow@maven.co.nz
+about=Advanced TUFLOW pre- and post-processing tools for hydraulic modeling workflows.
+category=Analysis
+icon=flood-icon.png
+homepage=https://github.com/haownz/tuflow-tools
+tracker=https://github.com/haownz/tuflow-tools/issues
+repository=https://github.com/haownz/tuflow-tools
+tags=TUFLOW,hydraulic,modeling,flood,analysis,raster,vector,post-processing
+experimental=False
+deprecated=False
+changelog=Version 1.3.6 (2026-01-28): Added interactive "Cross Sections along Alignment" tool with PDF export; refactored "Load Sample Points" algorithm with improved UI and robustness.
+
+[requirements]
+python_requires=>=3.8
+dependencies=qgis>=3.22
+
+[compatibility]
+qgis_versions=3.22-3.99
+os_windows=True
+os_macos=True
+os_linux=True
+
+[links]
+documentation=https://github.com/haownz/tuflow-tools/wiki
+examples=https://github.com/haownz/tuflow-tools/tree/main/examples
+support=https://github.com/haownz/tuflow-tools/discussions
+
+[acknowledgments]
+funding=Developed with support from haownz
+contributors=TUFLOW user community for feedback and testing

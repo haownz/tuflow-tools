@@ -1,0 +1,8 @@
+resources.qrc
+*.qgs
+*.qgz
+*.dbf
+*.shx
+*.prj
+# 忽略任何大于 1MB 的文件
+maxSize=1048576
