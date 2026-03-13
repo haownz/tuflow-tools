@@ -20,7 +20,7 @@ Other retained features:
 - Robust CSV discovery for each layer (2D and optional 1D).
 - Peak markers/annotations (conditionally), tight axes, stable lifetime via _LIVE_WINDOWS.
 
-Author: Hao Wu (Maven)
+Author: Hao Wu
 """
 
 from __future__ import annotations

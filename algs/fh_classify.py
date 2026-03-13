@@ -4,7 +4,7 @@
 # Medium: 0.3 ≤ d < 0.5 m or 0.24 ≤ d*v < 0.4 m2/s
 # High: 0.5 ≤ d < 1.2 m or 0.4 ≤ d*v < 0.8 m2/s
 # Very High: d ≥ 1.2 m or d*v ≥ 0.8 m2/s
-# Authors: Hao Wu at Maven Associates Ltd
+# Author: Hao Wu
 
 # -*- coding: utf-8 -*-
 import os
