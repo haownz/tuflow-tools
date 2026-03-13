@@ -151,7 +151,6 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
 ## 👤 Author
 
 **Dr. Hao Wu**  
-📧 [haow@maven.co.nz](mailto:haow@maven.co.nz)  
 🐙 [@haownz](https://github.com/haownz)
 
 ---
