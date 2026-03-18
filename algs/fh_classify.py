@@ -32,10 +32,12 @@ import numpy as np
 # Utilities
 # -----------------------------------------------------------------------------
 
+
 def _get_active_raster_layer() -> Optional[QgsRasterLayer]:
     """Return the currently active raster layer, if any."""
     try:
         from qgis.utils import iface  # type: ignore
+
         lyr = iface.activeLayer() if iface else None
         return lyr if isinstance(lyr, QgsRasterLayer) else None
     except Exception:
@@ -50,6 +52,7 @@ def _extent_to_bounds(ext):
 # -----------------------------------------------------------------------------
 # Main Processing Algorithm
 # -----------------------------------------------------------------------------
+
 
 class FloodHazardClassifyAlgorithm(QgsProcessingAlgorithm):
     """
@@ -75,7 +78,9 @@ class FloodHazardClassifyAlgorithm(QgsProcessingAlgorithm):
     P_VEL_TOKEN = "VELOCITY_TOKEN"
     P_TAIL_SUFFIX = "TAIL_SUFFIX"
 
-    P_APPLY_STYLE = "APPLY_STYLE"  # kept to avoid breaking models; no-op in this revision
+    P_APPLY_STYLE = (
+        "APPLY_STYLE"  # kept to avoid breaking models; no-op in this revision
+    )
 
     RESAMPLE_ENUM = ["Nearest", "Bilinear", "Cubic"]
 
@@ -106,44 +111,115 @@ class FloodHazardClassifyAlgorithm(QgsProcessingAlgorithm):
 
     def initAlgorithm(self, config=None):
         # Inputs
-        self.addParameter(QgsProcessingParameterRasterLayer(self.P_DEPTH, "Depth raster (m)", optional=True))
-        self.addParameter(QgsProcessingParameterRasterLayer(self.P_VEL, "Velocity raster (m/s)", optional=True))
-        self.addParameter(QgsProcessingParameterBoolean(self.P_AUTODERIVE, "Auto derive from active layer", defaultValue=True))
+        self.addParameter(
+            QgsProcessingParameterRasterLayer(
+                self.P_DEPTH, "Depth raster (m)", optional=True
+            )
+        )
+        self.addParameter(
+            QgsProcessingParameterRasterLayer(
+                self.P_VEL, "Velocity raster (m/s)", optional=True
+            )
+        )
+        self.addParameter(
+            QgsProcessingParameterBoolean(
+                self.P_AUTODERIVE, "Auto derive from active layer", defaultValue=True
+            )
+        )
 
         # Naming pattern flexibility (recognizes optional HR in tail)
-        self.addParameter(QgsProcessingParameterString(
-            self.P_NAME_REGEX,
-            "Active-layer suffix regex to strip to base",
-            defaultValue=r'_(?P<token>h|d|V)_(?P<hr>HR_)?Max$'
-        ))
-        self.addParameter(QgsProcessingParameterString(self.P_DEPTH_TOKEN, "Depth token", defaultValue="d"))
-        self.addParameter(QgsProcessingParameterString(self.P_VEL_TOKEN, "Velocity token", defaultValue="V"))
+        self.addParameter(
+            QgsProcessingParameterString(
+                self.P_NAME_REGEX,
+                "Active-layer suffix regex to strip to base",
+                defaultValue=r"_(?P<token>h|d|V)_(?P<hr>HR_)?Max$",
+            )
+        )
+        self.addParameter(
+            QgsProcessingParameterString(
+                self.P_DEPTH_TOKEN, "Depth token", defaultValue="d"
+            )
+        )
+        self.addParameter(
+            QgsProcessingParameterString(
+                self.P_VEL_TOKEN, "Velocity token", defaultValue="V"
+            )
+        )
         # AUTO tail uses matched _HR_Max or _Max with rules below
-        self.addParameter(QgsProcessingParameterString(self.P_TAIL_SUFFIX, "Tail suffix", defaultValue="AUTO"))
+        self.addParameter(
+            QgsProcessingParameterString(
+                self.P_TAIL_SUFFIX, "Tail suffix", defaultValue="AUTO"
+            )
+        )
 
         # Alignment / resample
-        self.addParameter(QgsProcessingParameterBoolean(self.P_RESAMPLE, "Auto-resample velocity to depth grid", defaultValue=True))
-        self.addParameter(QgsProcessingParameterEnum(self.P_RESAMPLE_ALG, "Resample algorithm", options=self.RESAMPLE_ENUM, defaultValue=1))  # Bilinear
+        self.addParameter(
+            QgsProcessingParameterBoolean(
+                self.P_RESAMPLE,
+                "Auto-resample velocity to depth grid",
+                defaultValue=True,
+            )
+        )
+        self.addParameter(
+            QgsProcessingParameterEnum(
+                self.P_RESAMPLE_ALG,
+                "Resample algorithm",
+                options=self.RESAMPLE_ENUM,
+                defaultValue=1,
+            )
+        )  # Bilinear
 
         # Strictness / tolerance
-        self.addParameter(QgsProcessingParameterBoolean(self.P_INCLUSIVE, "Inclusive boundaries (≥)", defaultValue=True))
-        self.addParameter(QgsProcessingParameterNumber(self.P_EPS, "Epsilon tolerance", type=QgsProcessingParameterNumber.Double, defaultValue=0.0, minValue=0.0))
+        self.addParameter(
+            QgsProcessingParameterBoolean(
+                self.P_INCLUSIVE, "Inclusive boundaries (≥)", defaultValue=True
+            )
+        )
+        self.addParameter(
+            QgsProcessingParameterNumber(
+                self.P_EPS,
+                "Epsilon tolerance",
+                type=QgsProcessingParameterNumber.Double,
+                defaultValue=0.0,
+                minValue=0.0,
+            )
+        )
 
         # Output (no styling applied in this revision)
-        self.addParameter(QgsProcessingParameterBoolean(self.P_APPLY_STYLE, "Apply palette + labels (ignored)", defaultValue=False))
-        self.addParameter(QgsProcessingParameterRasterDestination(self.P_OUTPUT, "Flood Hazard Classification", QgsProcessing.TEMPORARY_OUTPUT))
+        self.addParameter(
+            QgsProcessingParameterBoolean(
+                self.P_APPLY_STYLE,
+                "Apply palette + labels (ignored)",
+                defaultValue=False,
+            )
+        )
+        self.addParameter(
+            QgsProcessingParameterRasterDestination(
+                self.P_OUTPUT,
+                "Flood Hazard Classification",
+                QgsProcessing.TEMPORARY_OUTPUT,
+            )
+        )
 
         # ----- Prefill defaults for DEPTH / VELOCITY from active layer -----
         try:
             from qgis.utils import iface  # UI context
+
             active = iface.activeLayer() if iface else None
 
-            def _layer_or_sibling_default(active_layer: QgsRasterLayer, target_name: str) -> Optional[str]:
+            def _layer_or_sibling_default(
+                active_layer: QgsRasterLayer, target_name: str
+            ) -> Optional[str]:
                 # 1) project lookup by name -> return layer ID (preferred)
                 lyr = next(
-                    (l for l in QgsProject.instance().mapLayers().values()
-                     if isinstance(l, QgsRasterLayer) and l.name() == target_name and l.isValid()),
-                    None
+                    (
+                        layer
+                        for layer in QgsProject.instance().mapLayers().values()
+                        if isinstance(layer, QgsRasterLayer)
+                        and layer.name() == target_name
+                        and layer.isValid()
+                    ),
+                    None,
                 )
                 if lyr:
                     return lyr.id()
@@ -157,24 +233,26 @@ class FloodHazardClassifyAlgorithm(QgsProcessingAlgorithm):
 
             if isinstance(active, QgsRasterLayer):
                 base, token, matched_tail = self._base_and_tail_from_name(
-                    active.name(), r'_(?P<token>h|d|V)_(?P<hr>HR_)?Max$'
+                    active.name(), r"_(?P<token>h|d|V)_(?P<hr>HR_)?Max$"
                 )
                 if base:
                     # Apply rule: d/h_HR_Max -> use _Max for defaults
                     tail = self._choose_tail_for_defaults(token, matched_tail)
 
                     depth_name = f"{base}_d{tail}"
-                    vel_name   = f"{base}_V{tail}"
+                    vel_name = f"{base}_V{tail}"
 
                     depth_def = _layer_or_sibling_default(active, depth_name)
-                    vel_def   = _layer_or_sibling_default(active, vel_name)
+                    vel_def = _layer_or_sibling_default(active, vel_name)
 
                     if depth_def:
                         p = self.parameterDefinition(self.P_DEPTH)
-                        if p: p.setDefaultValue(depth_def)
+                        if p:
+                            p.setDefaultValue(depth_def)
                     if vel_def:
                         p = self.parameterDefinition(self.P_VEL)
-                        if p: p.setDefaultValue(vel_def)
+                        if p:
+                            p.setDefaultValue(vel_def)
         except Exception:
             # Silent: best-effort defaults
             pass
@@ -185,7 +263,7 @@ class FloodHazardClassifyAlgorithm(QgsProcessingAlgorithm):
             return re.compile(regex_text, re.IGNORECASE)
         except Exception:
             # Fallback to simple pattern if user-supplied regex is invalid
-            return re.compile(r'_(h|d|V)_Max$', re.IGNORECASE)
+            return re.compile(r"_(h|d|V)_Max$", re.IGNORECASE)
 
     def _base_and_tail_from_name(self, name: str, regex_text: str):
         """
@@ -196,19 +274,21 @@ class FloodHazardClassifyAlgorithm(QgsProcessingAlgorithm):
         m = rx.search(name)
         if not m:
             return None, None, None
-        base = name[:m.start()]
-        token = m.groupdict().get('token')
-        hr = m.groupdict().get('hr') or ''
+        base = name[: m.start()]
+        token = m.groupdict().get("token")
+        hr = m.groupdict().get("hr") or ""
         tail = f"_{hr}Max"
         return base, token, tail
 
-    def _choose_tail_for_defaults(self, token: Optional[str], matched_tail: Optional[str]) -> str:
+    def _choose_tail_for_defaults(
+        self, token: Optional[str], matched_tail: Optional[str]
+    ) -> str:
         """
         Rule:
         - If the active token is 'd' or 'h' and we matched '_HR_Max', prefer '_Max' (drop HR).
         - Otherwise use the matched tail if present, else fallback to '_Max'.
         """
-        mt = (matched_tail or "_Max")
+        mt = matched_tail or "_Max"
         if token and token.lower() in ("d", "h") and mt == "_HR_Max":
             return "_Max"
         return mt
@@ -221,7 +301,9 @@ class FloodHazardClassifyAlgorithm(QgsProcessingAlgorithm):
         return None
 
     @staticmethod
-    def _try_load_sibling(selected_layer: QgsRasterLayer, sibling_name: str) -> Optional[QgsRasterLayer]:
+    def _try_load_sibling(
+        selected_layer: QgsRasterLayer, sibling_name: str
+    ) -> Optional[QgsRasterLayer]:
         src = selected_layer.source()
         directory = os.path.dirname(src)
         for ext in (".tif", ".tiff", ".img", ".vrt"):
@@ -232,16 +314,23 @@ class FloodHazardClassifyAlgorithm(QgsProcessingAlgorithm):
                     return rl
         return None
 
-    def _autoderive(self, context: QgsProcessingContext,
-                    depth_token: str, vel_token: str,
-                    tail_suffix: str, name_regex: str) -> Tuple[QgsRasterLayer, QgsRasterLayer, str]:
+    def _autoderive(
+        self,
+        context: QgsProcessingContext,
+        depth_token: str,
+        vel_token: str,
+        tail_suffix: str,
+        name_regex: str,
+    ) -> Tuple[QgsRasterLayer, QgsRasterLayer, str]:
         active = _get_active_raster_layer()
         if active is None:
             raise QgsProcessingException(
                 "Select a raster named like '<base>_(h|d|V)_(HR_)?Max' to auto-derive <base>_d_* and <base>_V_*."
             )
 
-        base, token, matched_tail = self._base_and_tail_from_name(active.name(), name_regex)
+        base, token, matched_tail = self._base_and_tail_from_name(
+            active.name(), name_regex
+        )
         if not base:
             raise QgsProcessingException(
                 f"Cannot parse base scenario from '{active.name()}'. Regex: '{name_regex}'."
@@ -253,15 +342,23 @@ class FloodHazardClassifyAlgorithm(QgsProcessingAlgorithm):
             use_tail = self._choose_tail_for_defaults(token, matched_tail)
 
         depth_name = f"{base}_{depth_token}{use_tail}"
-        vel_name   = f"{base}_{vel_token}{use_tail}"
+        vel_name = f"{base}_{vel_token}{use_tail}"
 
-        depth = self._find_project_layer(depth_name) or self._try_load_sibling(active, depth_name)
-        vel   = self._find_project_layer(vel_name)   or self._try_load_sibling(active, vel_name)
+        depth = self._find_project_layer(depth_name) or self._try_load_sibling(
+            active, depth_name
+        )
+        vel = self._find_project_layer(vel_name) or self._try_load_sibling(
+            active, vel_name
+        )
 
         if not depth or not depth.isValid():
-            raise QgsProcessingException(f"Depth raster not found: '{depth_name}' (project or sibling file).")
+            raise QgsProcessingException(
+                f"Depth raster not found: '{depth_name}' (project or sibling file)."
+            )
         if not vel or not vel.isValid():
-            raise QgsProcessingException(f"Velocity raster not found: '{vel_name}' (project or sibling file).")
+            raise QgsProcessingException(
+                f"Velocity raster not found: '{vel_name}' (project or sibling file)."
+            )
 
         return depth, vel, base
 
@@ -276,13 +373,19 @@ class FloodHazardClassifyAlgorithm(QgsProcessingAlgorithm):
         return ds, arr, nd
 
     @staticmethod
-    def _warp_velocity_to_depth(vel_path: str, depth_layer: QgsRasterLayer, resample_alg: str, feedback) -> gdal.Dataset:
+    def _warp_velocity_to_depth(
+        vel_path: str, depth_layer: QgsRasterLayer, resample_alg: str, feedback
+    ) -> gdal.Dataset:
         try:
             bounds = _extent_to_bounds(depth_layer.extent())
             xres = depth_layer.rasterUnitsPerPixelX()
             yres = abs(depth_layer.rasterUnitsPerPixelY())
             dst_wkt = depth_layer.crs().toWkt()
-            alg_map = {"Nearest": gdal.GRA_NearestNeighbour, "Bilinear": gdal.GRA_Bilinear, "Cubic": gdal.GRA_Cubic}
+            alg_map = {
+                "Nearest": gdal.GRA_NearestNeighbour,
+                "Bilinear": gdal.GRA_Bilinear,
+                "Cubic": gdal.GRA_Cubic,
+            }
             alg = alg_map.get(resample_alg, gdal.GRA_Bilinear)
 
             dst_name = "/vsimem/vel_resampled.tif"
@@ -299,17 +402,23 @@ class FloodHazardClassifyAlgorithm(QgsProcessingAlgorithm):
             )
             ds = gdal.Warp(dst_name, vel_path, options=opts)
             if ds is None:
-                raise QgsProcessingException("GDAL Warp failed to resample velocity raster.")
+                raise QgsProcessingException(
+                    "GDAL Warp failed to resample velocity raster."
+                )
             return ds
         except Exception as e:
-            feedback.reportError(f"Resampling failed; proceeding without resample. Error: {e}")
+            feedback.reportError(
+                f"Resampling failed; proceeding without resample. Error: {e}"
+            )
             ds = gdal.Open(vel_path, gdal.GA_ReadOnly)
             if ds is None:
                 raise QgsProcessingException("Fallback open velocity raster failed.")
             return ds
 
     @staticmethod
-    def _write_gtiff_byte(out_path: str, template_ds, array: np.ndarray, nodata: int = 255):
+    def _write_gtiff_byte(
+        out_path: str, template_ds, array: np.ndarray, nodata: int = 255
+    ):
         """
         Write a standard Byte GeoTIFF (no palette, default MINISBLACK photometric),
         so QGIS loads as a gray single band. No styling is applied here.
@@ -338,13 +447,19 @@ class FloodHazardClassifyAlgorithm(QgsProcessingAlgorithm):
         # Read parameters
         autoderive = self.parameterAsBool(parameters, self.P_AUTODERIVE, context)
         name_regex = self.parameterAsString(parameters, self.P_NAME_REGEX, context)
-        depth_token = self.parameterAsString(parameters, self.P_DEPTH_TOKEN, context) or "d"
+        depth_token = (
+            self.parameterAsString(parameters, self.P_DEPTH_TOKEN, context) or "d"
+        )
         vel_token = self.parameterAsString(parameters, self.P_VEL_TOKEN, context) or "V"
-        tail_suffix = self.parameterAsString(parameters, self.P_TAIL_SUFFIX, context) or "AUTO"
+        tail_suffix = (
+            self.parameterAsString(parameters, self.P_TAIL_SUFFIX, context) or "AUTO"
+        )
 
         resample = self.parameterAsBool(parameters, self.P_RESAMPLE, context)
         resample_idx = self.parameterAsEnum(parameters, self.P_RESAMPLE_ALG, context)
-        resample_alg = self.RESAMPLE_ENUM[resample_idx] if resample_idx is not None else "Bilinear"
+        resample_alg = (
+            self.RESAMPLE_ENUM[resample_idx] if resample_idx is not None else "Bilinear"
+        )
 
         inclusive = self.parameterAsBool(parameters, self.P_INCLUSIVE, context)
         eps = float(self.parameterAsDouble(parameters, self.P_EPS, context))
@@ -357,7 +472,9 @@ class FloodHazardClassifyAlgorithm(QgsProcessingAlgorithm):
         base_name = None
 
         if autoderive or depth_layer is None or vel_layer is None:
-            depth_layer, vel_layer, base_name = self._autoderive(context, depth_token, vel_token, tail_suffix, name_regex)
+            depth_layer, vel_layer, base_name = self._autoderive(
+                context, depth_token, vel_token, tail_suffix, name_regex
+            )
 
         # Alignment check
         aligned = (
@@ -374,8 +491,12 @@ class FloodHazardClassifyAlgorithm(QgsProcessingAlgorithm):
         if aligned or not resample:
             ds_v, v, nd_v = self._np_from_raster(vel_layer.source())
         else:
-            feedback.pushInfo("Velocity misaligned — resampling to depth grid via GDAL Warp …")
-            ds_v = self._warp_velocity_to_depth(vel_layer.source(), depth_layer, resample_alg, feedback)
+            feedback.pushInfo(
+                "Velocity misaligned — resampling to depth grid via GDAL Warp …"
+            )
+            ds_v = self._warp_velocity_to_depth(
+                vel_layer.source(), depth_layer, resample_alg, feedback
+            )
             band_v = ds_v.GetRasterBand(1)
             nd_v = band_v.GetNoDataValue()
             v = band_v.ReadAsArray().astype(np.float32)
@@ -383,9 +504,9 @@ class FloodHazardClassifyAlgorithm(QgsProcessingAlgorithm):
         # NoData mask
         nod_mask = np.zeros_like(d, dtype=bool)
         if nd_d is not None:
-            nod_mask |= (d == nd_d)
+            nod_mask |= d == nd_d
         if nd_v is not None:
-            nod_mask |= (v == nd_v)
+            nod_mask |= v == nd_v
 
         # Threshold helpers
         def ge(val, bound):
@@ -399,16 +520,16 @@ class FloodHazardClassifyAlgorithm(QgsProcessingAlgorithm):
         dv = d * v
 
         very_high = ge(d, 1.2) | ge(dv, 0.8)
-        high = ((ge(d, 0.5) & lt(d, 1.2)) | (ge(dv, 0.4) & lt(dv, 0.8)))
-        medium = ((ge(d, 0.3) & lt(d, 0.5)) | (ge(dv, 0.24) & lt(dv, 0.4)))
+        high = (ge(d, 0.5) & lt(d, 1.2)) | (ge(dv, 0.4) & lt(dv, 0.8))
+        medium = (ge(d, 0.3) & lt(d, 0.5)) | (ge(dv, 0.24) & lt(dv, 0.4))
         # Low is the remainder
 
         out = np.zeros_like(d, dtype=np.uint8)
         out[very_high] = 3
         out[~very_high & high] = 2
         out[~very_high & ~high & medium] = 1
-        
-        nod_mask |= (d <= 0.005) | (v <= 0.005) # treat very small values as NoData
+
+        nod_mask |= (d <= 0.005) | (v <= 0.005)  # treat very small values as NoData
         nodata_val = 255
         out[nod_mask] = nodata_val
 
@@ -429,5 +550,7 @@ class FloodHazardClassifyAlgorithm(QgsProcessingAlgorithm):
         except Exception as e:
             feedback.reportError(f"Could not register layer for loading: {e}")
 
-        feedback.pushInfo("Hazard classification complete (0=Low, 1=Medium, 2=High, 3=Very High).")
+        feedback.pushInfo(
+            "Hazard classification complete (0=Low, 1=Medium, 2=High, 3=Very High)."
+        )
         return {self.P_OUTPUT: out_path}

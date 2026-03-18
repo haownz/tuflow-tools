@@ -14,16 +14,15 @@ from __future__ import annotations
 import os
 import re
 import csv
-import math
 from pathlib import Path
 from typing import Dict, Tuple, Optional, Set
 
-from qgis.PyQt.QtCore import QVariant
-from qgis.core import QgsProject, QgsVectorLayer, QgsRasterLayer, QgsField, edit
+from qgis.core import QgsProject, QgsVectorLayer, QgsRasterLayer
 from qgis.utils import iface
 
 
 # ---------- Selection helpers ----------
+
 
 def guess_selected_raster() -> Optional[QgsRasterLayer]:
     """Return the first selected raster layer, else the active layer if it is a raster, else None."""
@@ -43,6 +42,7 @@ def guess_selected_raster() -> Optional[QgsRasterLayer]:
 
 
 # ---------- Path helpers ----------
+
 
 def _strip_provider_options(uri: str) -> str:
     """Split off provider options (e.g., 'path|layerid=0') and any surrounding quotes."""
@@ -64,6 +64,8 @@ def _strip_provider_options(uri: str) -> str:
         first = first.split("|", 1)[0]
 
     return first
+
+
 def source_path_from_layer(layer) -> Path:
     """Best-effort local filesystem path for a layer source (may not exist)."""
     uri = ""
@@ -104,6 +106,7 @@ def layer_base_dir(layer) -> Path:
 
 
 # ---------- PO line derivation ----------
+
 
 def derive_poline_path_from_raster(src: str, suffix: str = "_d_*.tif") -> str:
     """
@@ -165,6 +168,7 @@ def load_vector_with_fallback(path: str, display_name: str) -> Optional[QgsVecto
 
 # ---------- CSV / QP helpers ----------
 
+
 def base_name_from_source(layer) -> str:
     """
     Base name for CSVs inferred from the PO line layer source:
@@ -175,7 +179,9 @@ def base_name_from_source(layer) -> str:
     return re.sub(r"_PLOT_L$", "", stem, flags=re.IGNORECASE)
 
 
-def resolve_csv_paths_from_layer(layer, rel_dir: str) -> Tuple[Dict[str, Path], Dict[str, Path], Path, Path]:
+def resolve_csv_paths_from_layer(
+    layer, rel_dir: str
+) -> Tuple[Dict[str, Path], Dict[str, Path], Path, Path]:
     """
     Return (found, tried, csv_dir, base_dir) where:
       - found = {'1d': Path|None, '2d': Path|None}
@@ -211,7 +217,11 @@ def keys_from_column_header(col_name: str) -> Set[str]:
     pre_u = pre.upper()
 
     # Remove common leading tokens (Q, QP, DISCHARGE, Q_FLOW) followed by space(s)
-    token = re.compile(r"^(Q|QP|DISCHARGE|Q_FLOW)\s+", re.IGNORECASE).sub("", pre, 1).strip()
+    token = (
+        re.compile(r"^(Q|QP|DISCHARGE|Q_FLOW)\s+", re.IGNORECASE)
+        .sub("", pre, 1)
+        .strip()
+    )
     token_u = token.upper()
 
     keys: Set[str] = {token_u, f"Q{token_u}", f"Q {token_u}", pre_u, full_u}
@@ -248,7 +258,9 @@ def compute_max_map_for_csv(csv_path: Path, skip_cols: int = 2) -> Dict[str, flo
             if header is None:
                 header = [h.strip() for h in row]
                 if len(header) <= skip_cols:
-                    raise ValueError(f"SKIP_COLS={skip_cols} leaves no data columns in {csv_path}.")
+                    raise ValueError(
+                        f"SKIP_COLS={skip_cols} leaves no data columns in {csv_path}."
+                    )
                 max_vals = [None] * (len(header) - skip_cols)
                 continue
 
@@ -298,6 +310,7 @@ def normalize_id(val) -> Optional[str]:
 
 # ---------- Misc helpers sometimes used elsewhere ----------
 
+
 def find_parent_results_dir(path: Path) -> Optional[Path]:
     """Return the nearest ancestor named 'results', else None."""
     try:
@@ -309,7 +322,9 @@ def find_parent_results_dir(path: Path) -> Optional[Path]:
     return None
 
 
-def locate_ov_zo_csvs_for_layer(layer, results_dir: Optional[str] = None) -> Tuple[Optional[Path], Optional[Path]]:
+def locate_ov_zo_csvs_for_layer(
+    layer, results_dir: Optional[str] = None
+) -> Tuple[Optional[Path], Optional[Path]]:
     """
     Try to locate PO_Line_OV.csv and PO_Line_ZO.csv near the given layer, optionally within a supplied results dir.
     Returns (ov_path_or_None, zo_path_or_None).

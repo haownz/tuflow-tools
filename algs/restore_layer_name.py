@@ -9,8 +9,8 @@ from qgis.core import (
     QgsProcessingOutputNumber,
     QgsProcessingOutputString,
     QgsMapLayer,
-    QgsProject
 )
+
 
 class RestoreLayerNameAlgorithm(QgsProcessingAlgorithm):
     """
@@ -18,27 +18,28 @@ class RestoreLayerNameAlgorithm(QgsProcessingAlgorithm):
     For GeoPackages, it restores the name to the imported layer's table name.
     For other files, it restores to the physical file name without extension.
     """
-    PARAM_LAYERS = 'LAYERS'
-    OUTPUT_COUNT = 'RESTORED_COUNT'
-    OUTPUT_LOG = 'RESTORE_LOG'
+
+    PARAM_LAYERS = "LAYERS"
+    OUTPUT_COUNT = "RESTORED_COUNT"
+    OUTPUT_LOG = "RESTORE_LOG"
 
     def tr(self, message):
-        return QCoreApplication.translate('RestoreLayerName', message)
+        return QCoreApplication.translate("RestoreLayerName", message)
 
     def createInstance(self):
         return RestoreLayerNameAlgorithm()
 
     def name(self):
-        return 'restore_layer_name'
+        return "restore_layer_name"
 
     def displayName(self):
-        return self.tr('Restore Layer Name')
+        return self.tr("Restore Layer Name")
 
     def group(self):
-        return self.tr('General Tools')
+        return self.tr("General Tools")
 
     def groupId(self):
-        return 'general_tools'
+        return "general_tools"
 
     def shortHelpString(self):
         return self.tr(
@@ -51,31 +52,37 @@ class RestoreLayerNameAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterMultipleLayers(
                 self.PARAM_LAYERS,
-                self.tr('Layers to restore name'),
+                self.tr("Layers to restore name"),
                 layerType=QgsProcessing.TypeMapLayer,
-                defaultValue=None
+                defaultValue=None,
             )
         )
 
-        self.addOutput(QgsProcessingOutputNumber(self.OUTPUT_COUNT, self.tr('Restored layers count')))
-        self.addOutput(QgsProcessingOutputString(self.OUTPUT_LOG, self.tr('Restore log')))
+        self.addOutput(
+            QgsProcessingOutputNumber(
+                self.OUTPUT_COUNT, self.tr("Restored layers count")
+            )
+        )
+        self.addOutput(
+            QgsProcessingOutputString(self.OUTPUT_LOG, self.tr("Restore log"))
+        )
 
     def _derive_layer_name(self, layer):
         dp = layer.dataProvider()
         if not dp:
             return None
-        uri = dp.dataSourceUri() or ''
-        
+        uri = dp.dataSourceUri() or ""
+
         # 1. Try extracting exact layer name from GeoPackage or other multi-layer formats
         # Format often resembles: path/to/file.gpkg|layername=my_layer_abc
         match = re.search(r"layername=([^|]+)", uri, re.IGNORECASE)
         if match:
             # Drop any trailing things attached to the layer name option
-            return match.group(1).split(' ')[0]
+            return match.group(1).split(" ")[0]
 
         # 2. Extract base filename (fallback)
-        uri_main = uri.split('|', 1)[0]
-        uri_main = uri_main.split('?', 1)[0]
+        uri_main = uri.split("|", 1)[0]
+        uri_main = uri_main.split("?", 1)[0]
         base = os.path.basename(uri_main)
         name_no_ext, _ = os.path.splitext(base)
 
@@ -83,25 +90,27 @@ class RestoreLayerNameAlgorithm(QgsProcessingAlgorithm):
 
     def processAlgorithm(self, parameters, context, feedback):
         layers_param = self.parameterAsLayerList(parameters, self.PARAM_LAYERS, context)
-        
+
         target_layers = []
         if layers_param:
-            target_layers = [lyr for lyr in layers_param if isinstance(lyr, QgsMapLayer)]
+            target_layers = [
+                lyr for lyr in layers_param if isinstance(lyr, QgsMapLayer)
+            ]
         else:
             # Fallback to current selection in QGIS if no layer provided via parameter UI
             try:
                 from qgis.utils import iface
+
                 if iface is not None and iface.layerTreeView() is not None:
                     target_layers = iface.layerTreeView().selectedLayers()
             except Exception:
                 target_layers = []
 
         if not target_layers:
-            feedback.pushInfo(self.tr("No valid layers provided or selected to restore name."))
-            return {
-                self.OUTPUT_COUNT: 0,
-                self.OUTPUT_LOG: 'No layers processed.'
-            }
+            feedback.pushInfo(
+                self.tr("No valid layers provided or selected to restore name.")
+            )
+            return {self.OUTPUT_COUNT: 0, self.OUTPUT_LOG: "No layers processed."}
 
         restored_count = 0
         log_lines = []
@@ -119,10 +128,7 @@ class RestoreLayerNameAlgorithm(QgsProcessingAlgorithm):
             else:
                 log_lines.append(f'"{old_name}" -> (Unchanged, already matches source)')
 
-        log_text = '\n'.join(log_lines)
-        feedback.pushInfo('Restore Results:\n' + log_text)
+        log_text = "\n".join(log_lines)
+        feedback.pushInfo("Restore Results:\n" + log_text)
 
-        return {
-            self.OUTPUT_COUNT: restored_count,
-            self.OUTPUT_LOG: log_text
-        }
+        return {self.OUTPUT_COUNT: restored_count, self.OUTPUT_LOG: log_text}

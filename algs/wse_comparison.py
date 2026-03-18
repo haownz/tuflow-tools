@@ -10,13 +10,12 @@ from qgis.core import (
     QgsProcessingParameterNumber,
     QgsProcessingParameterRasterDestination,
     QgsProject,
-    QgsCoordinateReferenceSystem,
     QgsRasterLayer,
-    QgsCoordinateTransform
+    QgsCoordinateTransform,
 )
 from osgeo import gdal
 import numpy as np
-import os
+
 
 class WSEComparisonAlgorithm(QgsProcessingAlgorithm):
     """
@@ -54,24 +53,35 @@ class WSEComparisonAlgorithm(QgsProcessingAlgorithm):
         )
 
     def initAlgorithm(self, config=None):
-        self.addParameter(QgsProcessingParameterRasterLayer(self.P_WSE1, "WSE1 (Base/Current Raster)"))
-        self.addParameter(QgsProcessingParameterRasterLayer(self.P_WSE2, "WSE2 (Comparison Raster)"))
-        self.addParameter(QgsProcessingParameterCrs(self.P_TARGET_CRS, "Target CRS", defaultValue="ProjectCrs"))
-        self.addParameter(QgsProcessingParameterNumber(
-            self.P_TARGET_RES, 
-            "Target Resolution (leave empty for min of inputs)", 
-            type=QgsProcessingParameterNumber.Double, 
-            optional=True
-        ))
-        self.addParameter(QgsProcessingParameterRasterDestination(
-            self.P_OUTPUT, 
-            "WSE Difference Output", 
-            QgsProcessing.TEMPORARY_OUTPUT
-        ))
+        self.addParameter(
+            QgsProcessingParameterRasterLayer(self.P_WSE1, "WSE1 (Base/Current Raster)")
+        )
+        self.addParameter(
+            QgsProcessingParameterRasterLayer(self.P_WSE2, "WSE2 (Comparison Raster)")
+        )
+        self.addParameter(
+            QgsProcessingParameterCrs(
+                self.P_TARGET_CRS, "Target CRS", defaultValue="ProjectCrs"
+            )
+        )
+        self.addParameter(
+            QgsProcessingParameterNumber(
+                self.P_TARGET_RES,
+                "Target Resolution (leave empty for min of inputs)",
+                type=QgsProcessingParameterNumber.Double,
+                optional=True,
+            )
+        )
+        self.addParameter(
+            QgsProcessingParameterRasterDestination(
+                self.P_OUTPUT, "WSE Difference Output", QgsProcessing.TEMPORARY_OUTPUT
+            )
+        )
 
         # Try to pre-fill WSE1 with the active raster layer
         try:
             from qgis.utils import iface
+
             active = iface.activeLayer() if iface else None
             if isinstance(active, QgsRasterLayer):
                 p_wse1 = self.parameterDefinition(self.P_WSE1)
@@ -80,7 +90,9 @@ class WSEComparisonAlgorithm(QgsProcessingAlgorithm):
         except Exception:
             pass
 
-    def _warp_raster(self, layer, target_crs_wkt, target_res, feedback, output_bounds=None):
+    def _warp_raster(
+        self, layer, target_crs_wkt, target_res, feedback, output_bounds=None
+    ):
         try:
             opts_dict = {
                 "format": "VRT",
@@ -89,7 +101,7 @@ class WSEComparisonAlgorithm(QgsProcessingAlgorithm):
                 "resampleAlg": gdal.GRA_Bilinear,
                 "dstSRS": target_crs_wkt,
                 "multithread": True,
-                "warpOptions": ["INIT_DEST=NO_DATA"]
+                "warpOptions": ["INIT_DEST=NO_DATA"],
             }
             if output_bounds:
                 opts_dict["outputBounds"] = output_bounds
@@ -100,7 +112,9 @@ class WSEComparisonAlgorithm(QgsProcessingAlgorithm):
                 raise QgsProcessingException(f"GDAL Warp failed for {layer.name()}.")
             return ds
         except Exception as e:
-            raise QgsProcessingException(f"Resampling failed for {layer.name()}. Error: {e}")
+            raise QgsProcessingException(
+                f"Resampling failed for {layer.name()}. Error: {e}"
+            )
 
     def processAlgorithm(self, parameters, context, feedback):
         wse1_layer = self.parameterAsRasterLayer(parameters, self.P_WSE1, context)
@@ -119,38 +133,62 @@ class WSEComparisonAlgorithm(QgsProcessingAlgorithm):
             target_crs_param = context.project().crs()
 
         if wse1_layer.crs() != target_crs_param or wse2_layer.crs() != target_crs_param:
-            feedback.pushInfo(f"Target CRS is {target_crs_param.authid()}. Rasters will be projected.")
+            feedback.pushInfo(
+                f"Target CRS is {target_crs_param.authid()}. Rasters will be projected."
+            )
 
         # Determine target resolution
-        wse1_res = min(wse1_layer.rasterUnitsPerPixelX(), abs(wse1_layer.rasterUnitsPerPixelY()))
-        wse2_res = min(wse2_layer.rasterUnitsPerPixelX(), abs(wse2_layer.rasterUnitsPerPixelY()))
-        
+        wse1_res = min(
+            wse1_layer.rasterUnitsPerPixelX(), abs(wse1_layer.rasterUnitsPerPixelY())
+        )
+        wse2_res = min(
+            wse2_layer.rasterUnitsPerPixelX(), abs(wse2_layer.rasterUnitsPerPixelY())
+        )
+
         if target_res <= 0:
-             target_res = min(wse1_res, wse2_res)
-             feedback.pushInfo(f"Target resolution auto-calculated as: {target_res}")
+            target_res = min(wse1_res, wse2_res)
+            feedback.pushInfo(f"Target resolution auto-calculated as: {target_res}")
         else:
-             feedback.pushInfo(f"Using target resolution: {target_res}")
-        
+            feedback.pushInfo(f"Using target resolution: {target_res}")
+
         # Compute combined bounds in target CRS
         try:
-            transform1 = QgsCoordinateTransform(wse1_layer.crs(), target_crs_param, context.transformContext())
-            transform2 = QgsCoordinateTransform(wse2_layer.crs(), target_crs_param, context.transformContext())
+            transform1 = QgsCoordinateTransform(
+                wse1_layer.crs(), target_crs_param, context.transformContext()
+            )
+            transform2 = QgsCoordinateTransform(
+                wse2_layer.crs(), target_crs_param, context.transformContext()
+            )
             ext1 = transform1.transformBoundingBox(wse1_layer.extent())
             ext2 = transform2.transformBoundingBox(wse2_layer.extent())
             ext1.combineExtentWith(ext2)
-            combined_bounds = [ext1.xMinimum(), ext1.yMinimum(), ext1.xMaximum(), ext1.yMaximum()]
+            combined_bounds = [
+                ext1.xMinimum(),
+                ext1.yMinimum(),
+                ext1.xMaximum(),
+                ext1.yMaximum(),
+            ]
         except Exception:
             ext1 = wse1_layer.extent()
             ext2 = wse2_layer.extent()
             ext1.combineExtentWith(ext2)
-            combined_bounds = [ext1.xMinimum(), ext1.yMinimum(), ext1.xMaximum(), ext1.yMaximum()]
+            combined_bounds = [
+                ext1.xMinimum(),
+                ext1.yMinimum(),
+                ext1.xMaximum(),
+                ext1.yMaximum(),
+            ]
 
         # Warp both to target CRS, res, and bounds
         target_crs_wkt = target_crs_param.toWkt()
         feedback.pushInfo("Warping WSE1...")
-        ds1 = self._warp_raster(wse1_layer, target_crs_wkt, target_res, feedback, combined_bounds)
+        ds1 = self._warp_raster(
+            wse1_layer, target_crs_wkt, target_res, feedback, combined_bounds
+        )
         feedback.pushInfo("Warping WSE2...")
-        ds2 = self._warp_raster(wse2_layer, target_crs_wkt, target_res, feedback, combined_bounds)
+        ds2 = self._warp_raster(
+            wse2_layer, target_crs_wkt, target_res, feedback, combined_bounds
+        )
 
         # Read arrays
         band1 = ds1.GetRasterBand(1)
@@ -162,7 +200,9 @@ class WSEComparisonAlgorithm(QgsProcessingAlgorithm):
         arr2 = band2.ReadAsArray().astype(np.float32)
 
         if arr1.shape != arr2.shape:
-             raise QgsProcessingException(f"Resampling produced different grid sizes: WSE1 {arr1.shape} vs WSE2 {arr2.shape}")
+            raise QgsProcessingException(
+                f"Resampling produced different grid sizes: WSE1 {arr1.shape} vs WSE2 {arr2.shape}"
+            )
 
         feedback.pushInfo("Calculating differences...")
 
@@ -173,10 +213,10 @@ class WSEComparisonAlgorithm(QgsProcessingAlgorithm):
         both_wet = valid1 & valid2
         was_wet_now_dry = ~valid1 & valid2
         was_dry_now_wet = valid1 & ~valid2
-        
+
         # Calculate diff
-        out_arr = np.full_like(arr1, -99999.0) # Background nodata
-        
+        out_arr = np.full_like(arr1, -99999.0)  # Background nodata
+
         out_arr[both_wet] = arr1[both_wet] - arr2[both_wet]
         out_arr[was_wet_now_dry] = -9999.0
         out_arr[was_dry_now_wet] = 9999.0

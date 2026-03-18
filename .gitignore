@@ -28,3 +28,6 @@ desktop.ini
 # Temp
 *.log
 *.tmp
+.ruff_cache/
+ruff_errors.json
+ruff_errors.txt

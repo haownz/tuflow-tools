@@ -15,6 +15,7 @@ from qgis.core import (
     QgsMapLayerType,
 )
 
+
 def _collect_visible_rasters_in_group(group_node):
     """
     Recursively collect names of visible raster layers under the given group node.
@@ -34,15 +35,17 @@ def _collect_visible_rasters_in_group(group_node):
         # Child layer node: check visibility + type
         elif isinstance(child, QgsLayerTreeLayer):
             lyr = child.layer()
-            if (lyr is not None
+            if (
+                lyr is not None
                 and child.isVisible()
-                and lyr.type() == QgsMapLayerType.RasterLayer):
+                and lyr.type() == QgsMapLayerType.RasterLayer
+            ):
                 names.append(lyr.name())
 
     return names
 
 
-@qgsfunction(args='auto', group='Layer Tree')
+@qgsfunction(args="auto", group="Layer Tree")
 def visible_rasters_in_group(group_name, feature, parent):
     """
     visible_rasters_in_group(group_name) -> array

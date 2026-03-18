@@ -8,38 +8,40 @@ from qgis.core import (
     QgsProcessingOutputNumber,
     QgsProcessingOutputString,
     QgsFeature,
-    QgsGeometry
+    QgsGeometry,
 )
+
 
 class AppendFeaturesAlgorithm(QgsProcessingAlgorithm):
     """
     Appends features from a source vector layer to a target vector layer.
     Automatically creates missing fields in the target layer and preserves all attribute values.
     """
-    PARAM_INPUT = 'INPUT'
-    PARAM_TARGET = 'TARGET'
-    
-    OUTPUT_COUNT = 'APPENDED_COUNT'
-    OUTPUT_NEW_FIELDS = 'ADDED_FIELDS_COUNT'
-    OUTPUT_LOG = 'APPEND_LOG'
+
+    PARAM_INPUT = "INPUT"
+    PARAM_TARGET = "TARGET"
+
+    OUTPUT_COUNT = "APPENDED_COUNT"
+    OUTPUT_NEW_FIELDS = "ADDED_FIELDS_COUNT"
+    OUTPUT_LOG = "APPEND_LOG"
 
     def tr(self, message):
-        return QCoreApplication.translate('AppendFeatures', message)
+        return QCoreApplication.translate("AppendFeatures", message)
 
     def createInstance(self):
         return AppendFeaturesAlgorithm()
 
     def name(self):
-        return 'append_features'
+        return "append_features"
 
     def displayName(self):
-        return self.tr('Append Features')
+        return self.tr("Append Features")
 
     def group(self):
-        return self.tr('General Tools')
+        return self.tr("General Tools")
 
     def groupId(self):
-        return 'general_tools'
+        return "general_tools"
 
     def shortHelpString(self):
         return self.tr(
@@ -52,23 +54,33 @@ class AppendFeaturesAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterFeatureSource(
                 self.PARAM_INPUT,
-                self.tr('Input layer (source features)'),
-                [QgsProcessing.TypeVectorAnyGeometry]
+                self.tr("Input layer (source features)"),
+                [QgsProcessing.TypeVectorAnyGeometry],
             )
         )
 
         self.addParameter(
             QgsProcessingParameterVectorLayer(
                 self.PARAM_TARGET,
-                self.tr('Target layer (to append into)'),
+                self.tr("Target layer (to append into)"),
                 [QgsProcessing.TypeVectorAnyGeometry],
-                defaultValue=None
+                defaultValue=None,
             )
         )
 
-        self.addOutput(QgsProcessingOutputNumber(self.OUTPUT_COUNT, self.tr('Appended features count')))
-        self.addOutput(QgsProcessingOutputNumber(self.OUTPUT_NEW_FIELDS, self.tr('New fields added to target')))
-        self.addOutput(QgsProcessingOutputString(self.OUTPUT_LOG, self.tr('Append log')))
+        self.addOutput(
+            QgsProcessingOutputNumber(
+                self.OUTPUT_COUNT, self.tr("Appended features count")
+            )
+        )
+        self.addOutput(
+            QgsProcessingOutputNumber(
+                self.OUTPUT_NEW_FIELDS, self.tr("New fields added to target")
+            )
+        )
+        self.addOutput(
+            QgsProcessingOutputString(self.OUTPUT_LOG, self.tr("Append log"))
+        )
 
     def processAlgorithm(self, parameters, context, feedback):
         source = self.parameterAsSource(parameters, self.PARAM_INPUT, context)
@@ -76,17 +88,26 @@ class AppendFeaturesAlgorithm(QgsProcessingAlgorithm):
             feedback.reportError("Invalid input source layer.", fatalError=True)
             return {}
 
-        target_layer = self.parameterAsVectorLayer(parameters, self.PARAM_TARGET, context)
+        target_layer = self.parameterAsVectorLayer(
+            parameters, self.PARAM_TARGET, context
+        )
         if target_layer is None:
             feedback.reportError("Invalid target layer.", fatalError=True)
             return {}
 
-        if not target_layer.isEditable() and not target_layer.dataProvider().capabilities() & target_layer.dataProvider().AddFeatures:
-            feedback.reportError("Target layer does not support adding features or is not editable.", fatalError=True)
+        if (
+            not target_layer.isEditable()
+            and not target_layer.dataProvider().capabilities()
+            & target_layer.dataProvider().AddFeatures
+        ):
+            feedback.reportError(
+                "Target layer does not support adding features or is not editable.",
+                fatalError=True,
+            )
             return {}
 
         dp_target = target_layer.dataProvider()
-        
+
         source_fields = source.fields()
         target_fields = target_layer.fields()
 
@@ -110,9 +131,12 @@ class AppendFeaturesAlgorithm(QgsProcessingAlgorithm):
                     dp_target.addAttributes(missing_fields)
                     target_layer.updateFields()
                 else:
-                    feedback.reportError("Target layer does not support adding missing attributes.", fatalError=True)
+                    feedback.reportError(
+                        "Target layer does not support adding missing attributes.",
+                        fatalError=True,
+                    )
                     return {}
-            
+
             # refresh target_fields since it changed
             target_fields = target_layer.fields()
 
@@ -136,7 +160,7 @@ class AppendFeaturesAlgorithm(QgsProcessingAlgorithm):
                 break
 
             new_feat = QgsFeature(target_fields)
-            
+
             # Geometry
             if feat.hasGeometry():
                 new_feat.setGeometry(QgsGeometry(feat.geometry()))
@@ -148,7 +172,7 @@ class AppendFeaturesAlgorithm(QgsProcessingAlgorithm):
 
             features_to_add.append(new_feat)
             appended_count += 1
-            
+
             feedback.setProgress(int(current * step))
 
         if features_to_add:
@@ -156,21 +180,23 @@ class AppendFeaturesAlgorithm(QgsProcessingAlgorithm):
                 target_layer.addFeatures(features_to_add)
             else:
                 dp_target.addFeatures(features_to_add)
-            
+
             target_layer.triggerRepaint()
 
         log_lines = []
         log_lines.append(f"Successfully appended {appended_count} features.")
         if added_field_names:
-            log_lines.append(f"Added {len(added_field_names)} missing fields: {', '.join(added_field_names)}")
+            log_lines.append(
+                f"Added {len(added_field_names)} missing fields: {', '.join(added_field_names)}"
+            )
         else:
             log_lines.append("No new fields needed to be added.")
 
-        log_text = '\n'.join(log_lines)
+        log_text = "\n".join(log_lines)
         feedback.pushInfo(log_text)
 
         return {
             self.OUTPUT_COUNT: appended_count,
             self.OUTPUT_NEW_FIELDS: len(added_field_names),
-            self.OUTPUT_LOG: log_text
+            self.OUTPUT_LOG: log_text,
         }

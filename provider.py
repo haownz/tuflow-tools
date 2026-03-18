@@ -1,5 +1,5 @@
 # QGIS processing toolbox provider - TUFLOW Tools
-# 
+#
 
 # -*- coding: utf-8 -*-
 from qgis.core import QgsProcessingProvider
@@ -26,14 +26,15 @@ from .algs.wse_comparison import WSEComparisonAlgorithm
 from .algs.lc_add_fields import LandCoverAddFieldsAlgorithm
 from .algs.inundation_boundary import InundationBoundaryAlgorithm
 
+
 class TuflowProcessingProvider(QgsProcessingProvider):
-    PROVIDER_ID = 'tuflow_tools'
+    PROVIDER_ID = "tuflow_tools"
 
     def id(self):
         return self.PROVIDER_ID
 
     def name(self):
-        return 'TUFLOW Tools'
+        return "TUFLOW Tools"
 
     def longName(self):
         return self.name()
@@ -44,20 +45,39 @@ class TuflowProcessingProvider(QgsProcessingProvider):
 
     def loadAlgorithms(self):
         self.addAlgorithm(PluginSettingsAlgorithm())  # plugin settings dialog
-        self.addAlgorithm(ClearMemoryAlgorithm())     # clear memory and file locks
-        self.addAlgorithm(RenameLayersByPattern())    # batch rename layers
-        self.addAlgorithm(RestoreLayerNameAlgorithm()) # restore layer name from source
+        self.addAlgorithm(ClearMemoryAlgorithm())  # clear memory and file locks
+        self.addAlgorithm(RenameLayersByPattern())  # batch rename layers
+        self.addAlgorithm(RestoreLayerNameAlgorithm())  # restore layer name from source
+        self.addAlgorithm(
+            AppendFeaturesAlgorithm()
+        )  # append features from source to target layer
         self.addAlgorithm(GISLocationAlgorithm())
-        self.addAlgorithm(LandCoverAddFieldsAlgorithm()) # add specialized fields to land cover
-        self.addAlgorithm(ProcessLandcoverAlgorithm()) # process land cover layer
-        self.addAlgorithm(LoadGridOutputAlgorithm())    # load TUFLOW grid output wizard
-        self.addAlgorithm(LoadPOLinesAlgorithm())      # load TUFLOW PO line output
-        self.addAlgorithm(LoadSamplePointsAlgorithm()) # load TUFLOW sample points output
-        self.addAlgorithm(LoadProfileSectionsAlgorithm())  # generate section profiles for lines
-        self.addAlgorithm(CrossSectionAlignmentAlgorithm()) # interactive cross section tool
+        self.addAlgorithm(
+            LandCoverAddFieldsAlgorithm()
+        )  # add specialized fields to land cover
+        self.addAlgorithm(ProcessLandcoverAlgorithm())  # process land cover layer
+        self.addAlgorithm(LoadGridOutputAlgorithm())  # load TUFLOW grid output wizard
+        self.addAlgorithm(LoadPOLinesAlgorithm())  # load TUFLOW PO line output
+        self.addAlgorithm(
+            LoadSamplePointsAlgorithm()
+        )  # load TUFLOW sample points output
+        self.addAlgorithm(
+            LoadProfileSectionsAlgorithm()
+        )  # generate section profiles for lines
+        self.addAlgorithm(
+            CrossSectionAlignmentAlgorithm()
+        )  # interactive cross section tool
         self.addAlgorithm(TimeSeriesQPlotAlgorithm())  # time series Q plot algorithm
-        self.addAlgorithm(FloodHazardClassifyAlgorithm())  # classify flood hazard (0-3) from depth & velocity
-        self.addAlgorithm(TuflowLogMonitorAlgorithm())  # monitor TUFLOW log file algorithm
-        self.addAlgorithm(SampleRastersAlgorithm())  # sample multiple rasters at vertices
+        self.addAlgorithm(
+            FloodHazardClassifyAlgorithm()
+        )  # classify flood hazard (0-3) from depth & velocity
+        self.addAlgorithm(
+            TuflowLogMonitorAlgorithm()
+        )  # monitor TUFLOW log file algorithm
+        self.addAlgorithm(
+            SampleRastersAlgorithm()
+        )  # sample multiple rasters at vertices
         self.addAlgorithm(WSEComparisonAlgorithm())  # compare WSE rasters
-        self.addAlgorithm(InundationBoundaryAlgorithm())  # Trace flooded footprints from depths
+        self.addAlgorithm(
+            InundationBoundaryAlgorithm()
+        )  # Trace flooded footprints from depths

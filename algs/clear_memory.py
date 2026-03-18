@@ -1,34 +1,42 @@
 # -*- coding: utf-8 -*-
 import gc
-from qgis.core import (QgsProcessingAlgorithm, QgsApplication, QgsProject,
-                       QgsRasterLayer, QgsVectorLayer, Qgis)
+from qgis.core import (
+    QgsProcessingAlgorithm,
+    QgsApplication,
+    QgsProject,
+    QgsRasterLayer,
+    QgsVectorLayer,
+    Qgis,
+)
 from qgis.utils import iface
 from qgis.PyQt.QtWidgets import QApplication
+
 try:
     from osgeo import gdal
 except ImportError:
     gdal = None
+
 
 class ClearMemoryAlgorithm(QgsProcessingAlgorithm):
     """
     Algorithm to clear QGIS memory caches, refresh GDAL cache, and trigger Python GC.
     Helps in releasing file locks on Windows.
     """
-    
+
     def createInstance(self):
         return ClearMemoryAlgorithm()
 
     def name(self):
-        return 'clear_memory'
+        return "clear_memory"
 
     def displayName(self):
-        return 'Clear Memory'
+        return "Clear Memory"
 
     def group(self):
-        return '0 - Configuration'
+        return "0 - Configuration"
 
     def groupId(self):
-        return 'configuration'
+        return "configuration"
 
     def shortHelpString(self):
         return (
@@ -68,7 +76,7 @@ class ClearMemoryAlgorithm(QgsProcessingAlgorithm):
                 QgsApplication.svgCache().clear()
         except AttributeError:
             pass
-        
+
         # 3. Refresh GDAL Cache
         feedback.pushInfo("Step 3/6: Flushing GDAL cache...")
         if gdal:
@@ -76,7 +84,9 @@ class ClearMemoryAlgorithm(QgsProcessingAlgorithm):
             old_max = gdal.GetCacheMax()
             gdal.SetCacheMax(0)
             gdal.SetCacheMax(old_max)
-            feedback.pushInfo(f"  - GDAL cache flushed (Max size restored to {old_max}).")
+            feedback.pushInfo(
+                f"  - GDAL cache flushed (Max size restored to {old_max})."
+            )
         else:
             feedback.pushInfo("  - GDAL python bindings not available.")
 
@@ -97,7 +107,7 @@ class ClearMemoryAlgorithm(QgsProcessingAlgorithm):
                 feedback.pushInfo("  - Undo stack cleared.")
         except Exception:
             pass
-            
+
         try:
             clipboard = QApplication.clipboard()
             if clipboard:
@@ -115,8 +125,15 @@ class ClearMemoryAlgorithm(QgsProcessingAlgorithm):
 
         # Final GC run
         gc.collect()
-        
+
         feedback.pushInfo("Cleanup complete.")
-        feedback.pushInfo("IMPORTANT: If file remains locked, collapse the folder in the QGIS Browser Panel.")
-        iface.messageBar().pushMessage("Success", "Memory cleared. If lock persists, collapse folder in Browser Panel.", Qgis.Success, 5)
+        feedback.pushInfo(
+            "IMPORTANT: If file remains locked, collapse the folder in the QGIS Browser Panel."
+        )
+        iface.messageBar().pushMessage(
+            "Success",
+            "Memory cleared. If lock persists, collapse folder in Browser Panel.",
+            Qgis.Success,
+            5,
+        )
         return {}

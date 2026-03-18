@@ -1,11 +1,18 @@
 # -*- coding: utf-8 -*-
 from qgis.core import (
-    QgsProcessing, QgsProcessingAlgorithm, QgsProcessingException,
-    QgsProcessingParameterRasterLayer, QgsProcessingParameterString,
-    QgsRasterLayer, QgsProject
+    QgsProcessingAlgorithm,
+    QgsProcessingException,
+    QgsProcessingParameterRasterLayer,
+    QgsProcessingParameterString,
+    QgsRasterLayer,
+    QgsProject,
 )
 from qgis.PyQt.QtCore import QSettings
-from .po_common import guess_selected_raster, derive_poline_path_from_raster, load_vector_with_fallback
+from .po_common import (
+    guess_selected_raster,
+    derive_poline_path_from_raster,
+    load_vector_with_fallback,
+)
 import os
 import re
 
@@ -18,15 +25,24 @@ class LoadPoLineAlgorithm(QgsProcessingAlgorithm):
 
     ALG_ID = "po_load_poline"
 
-    def name(self): return self.ALG_ID
-    def displayName(self): return "Load PO line"
-    def group(self): return "PO tools"
-    def groupId(self): return "po_tools"
+    def name(self):
+        return self.ALG_ID
+
+    def displayName(self):
+        return "Load PO line"
+
+    def group(self):
+        return "PO tools"
+
+    def groupId(self):
+        return "po_tools"
 
     def shortHelpString(self):
-        return ("Derives and loads results/<run>/plot/gis/<base>_PLOT_L.shp "
-                "from raster results/<run>/grids/<base><suffix>. \n"
-                "Suffix pattern is sticky via QSettings (default: '_d_*.tif').")
+        return (
+            "Derives and loads results/<run>/plot/gis/<base>_PLOT_L.shp "
+            "from raster results/<run>/grids/<base><suffix>. \n"
+            "Suffix pattern is sticky via QSettings (default: '_d_*.tif')."
+        )
 
     def initAlgorithm(self, config=None):
         # Sticky default suffix
@@ -34,26 +50,40 @@ class LoadPoLineAlgorithm(QgsProcessingAlgorithm):
 
         self.addParameter(
             QgsProcessingParameterRasterLayer(
-                self.P_RASTER, "Raster (required; defaults to selected raster)",
-                optional=False, defaultValue=guess_selected_raster()
+                self.P_RASTER,
+                "Raster (required; defaults to selected raster)",
+                optional=False,
+                defaultValue=guess_selected_raster(),
             )
         )
         self.addParameter(
             QgsProcessingParameterString(
-                self.P_SUFFIX, "Suffix pattern", defaultValue=default_suffix, multiLine=False
+                self.P_SUFFIX,
+                "Suffix pattern",
+                defaultValue=default_suffix,
+                multiLine=False,
             )
         )
 
     def processAlgorithm(self, parameters, context, feedback):
-        rlayer = self.parameterAsRasterLayer(parameters, self.P_RASTER, context) or guess_selected_raster()
+        rlayer = (
+            self.parameterAsRasterLayer(parameters, self.P_RASTER, context)
+            or guess_selected_raster()
+        )
         if not isinstance(rlayer, QgsRasterLayer):
-            raise QgsProcessingException("Raster is required. Select a raster layer and retry.")
+            raise QgsProcessingException(
+                "Raster is required. Select a raster layer and retry."
+            )
 
         src = (rlayer.source() or "").splitlines()[0]
         if not os.path.exists(src):
-            raise QgsProcessingException("Selected raster is not a local file: {}".format(src))
+            raise QgsProcessingException(
+                "Selected raster is not a local file: {}".format(src)
+            )
 
-        suffix = self.parameterAsString(parameters, self.P_SUFFIX, context) or "_d_*.tif"
+        suffix = (
+            self.parameterAsString(parameters, self.P_SUFFIX, context) or "_d_*.tif"
+        )
         # Persist for next runs (sticky)
         QSettings().setValue(SETTINGS_KEY_SUFFIX, suffix)
 
@@ -75,7 +105,9 @@ class LoadPoLineAlgorithm(QgsProcessingAlgorithm):
             pass
 
         if not os.path.exists(po):
-            raise QgsProcessingException("PO line shapefile not found at expected path: {}".format(po))
+            raise QgsProcessingException(
+                "PO line shapefile not found at expected path: {}".format(po)
+            )
 
         # Use base name from raster for vector layer name
         # name = "{} poline".format(rlayer.name().strip())
@@ -91,7 +123,8 @@ class LoadPoLineAlgorithm(QgsProcessingAlgorithm):
         feedback.pushInfo("Loaded PO line: {} as {}".format(po, name))
         return {}
 
-    def createInstance(self): return LoadPoLineAlgorithm()
+    def createInstance(self):
+        return LoadPoLineAlgorithm()
 
     # ------------------------
     # Local fallback resolver
@@ -112,7 +145,9 @@ class LoadPoLineAlgorithm(QgsProcessingAlgorithm):
             match = pattern.match(fname)
             if not match:
                 raise QgsProcessingException(
-                    "Filename '{}' does not match suffix pattern '{}'.".format(fname, suffix)
+                    "Filename '{}' does not match suffix pattern '{}'.".format(
+                        fname, suffix
+                    )
                 )
             base = match.group(1)
         else:

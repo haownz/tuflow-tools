@@ -26,43 +26,44 @@ from qgis.core import (
 
 import re
 
+
 class RenameLayersByPattern(QgsProcessingAlgorithm):
     # Parameters
-    PARAM_USE_SELECTED = 'USE_SELECTED'
-    PARAM_LAYERS = 'LAYERS'
-    PARAM_MODE = 'MODE'
-    PARAM_PATTERN = 'PATTERN'
-    PARAM_REPLACEMENT = 'REPLACEMENT'
-    PARAM_CASE = 'CASE_SENSITIVE'
-    PARAM_ANCHOR = 'ANCHOR_WHOLE_NAME'
-    PARAM_PREVIEW = 'PREVIEW_ONLY'
-    PARAM_UNIQUE = 'ENSURE_UNIQUE'
-    PARAM_PREFIX = 'PREFIX'
-    PARAM_SUFFIX = 'SUFFIX'
+    PARAM_USE_SELECTED = "USE_SELECTED"
+    PARAM_LAYERS = "LAYERS"
+    PARAM_MODE = "MODE"
+    PARAM_PATTERN = "PATTERN"
+    PARAM_REPLACEMENT = "REPLACEMENT"
+    PARAM_CASE = "CASE_SENSITIVE"
+    PARAM_ANCHOR = "ANCHOR_WHOLE_NAME"
+    PARAM_PREVIEW = "PREVIEW_ONLY"
+    PARAM_UNIQUE = "ENSURE_UNIQUE"
+    PARAM_PREFIX = "PREFIX"
+    PARAM_SUFFIX = "SUFFIX"
 
     # Outputs
-    OUTPUT_COUNT = 'RENAMED_COUNT'
-    OUTPUT_LOG = 'RENAME_LOG'
+    OUTPUT_COUNT = "RENAMED_COUNT"
+    OUTPUT_LOG = "RENAME_LOG"
 
-    MODES = ['Wildcard', 'Regex']
+    MODES = ["Wildcard", "Regex"]
 
     def tr(self, string):
-        return QCoreApplication.translate('Processing', string)
+        return QCoreApplication.translate("Processing", string)
 
     def createInstance(self):
         return RenameLayersByPattern()
 
     def name(self):
-        return 'rename_layers_by_pattern'
+        return "rename_layers_by_pattern"
 
     def displayName(self):
-        return self.tr('Batch Rename Layers')
+        return self.tr("Batch Rename Layers")
 
     def group(self):
-        return 'General Tools'
+        return "General Tools"
 
     def groupId(self):
-        return 'general_tools'
+        return "general_tools"
 
     def shortHelpString(self):
         return self.tr(
@@ -76,100 +77,108 @@ class RenameLayersByPattern(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterBoolean(
                 self.PARAM_USE_SELECTED,
-                self.tr('Use layers selected in the Layers panel (if available)'),
-                defaultValue=True
+                self.tr("Use layers selected in the Layers panel (if available)"),
+                defaultValue=True,
             )
         )
 
         self.addParameter(
             QgsProcessingParameterMultipleLayers(
                 self.PARAM_LAYERS,
-                self.tr('Layers to rename (used if no panel selection or Use selected is off)'),
+                self.tr(
+                    "Layers to rename (used if no panel selection or Use selected is off)"
+                ),
                 layerType=QgsProcessing.TypeMapLayer,
-                optional=True
+                optional=True,
             )
         )
 
         self.addParameter(
             QgsProcessingParameterEnum(
                 self.PARAM_MODE,
-                self.tr('Pattern mode'),
+                self.tr("Pattern mode"),
                 options=self.MODES,
-                defaultValue=0  # Wildcard
+                defaultValue=0,  # Wildcard
             )
         )
 
         self.addParameter(
             QgsProcessingParameterString(
                 self.PARAM_PATTERN,
-                self.tr('Pattern (Wildcard: * and ? | Regex) — leave empty to skip'),
-                defaultValue='',
-                optional=True
+                self.tr("Pattern (Wildcard: * and ? | Regex) — leave empty to skip"),
+                defaultValue="",
+                optional=True,
             )
         )
 
         self.addParameter(
             QgsProcessingParameterString(
                 self.PARAM_REPLACEMENT,
-                self.tr('Replacement (supports regex backreferences, e.g., \\1, \\g<1>)'),
-                defaultValue='',
-                optional=True
+                self.tr(
+                    "Replacement (supports regex backreferences, e.g., \\1, \\g<1>)"
+                ),
+                defaultValue="",
+                optional=True,
             )
         )
 
         self.addParameter(
             QgsProcessingParameterBoolean(
-                self.PARAM_CASE,
-                self.tr('Case sensitive'),
-                defaultValue=False
+                self.PARAM_CASE, self.tr("Case sensitive"), defaultValue=False
             )
         )
 
         self.addParameter(
             QgsProcessingParameterBoolean(
                 self.PARAM_ANCHOR,
-                self.tr('Anchor to whole layer name (^...$)'),
-                defaultValue=False
+                self.tr("Anchor to whole layer name (^...$)"),
+                defaultValue=False,
             )
         )
 
         self.addParameter(
             QgsProcessingParameterString(
                 self.PARAM_PREFIX,
-                self.tr('Prefix to add (optional)'),
-                defaultValue='',
-                optional=True
+                self.tr("Prefix to add (optional)"),
+                defaultValue="",
+                optional=True,
             )
         )
 
         self.addParameter(
             QgsProcessingParameterString(
                 self.PARAM_SUFFIX,
-                self.tr('Suffix to add (optional)'),
-                defaultValue='',
-                optional=True
+                self.tr("Suffix to add (optional)"),
+                defaultValue="",
+                optional=True,
             )
         )
 
         self.addParameter(
             QgsProcessingParameterBoolean(
                 self.PARAM_PREVIEW,
-                self.tr('Preview only (don’t apply changes)'),
-                defaultValue=False
+                self.tr("Preview only (don’t apply changes)"),
+                defaultValue=False,
             )
         )
 
         self.addParameter(
             QgsProcessingParameterBoolean(
                 self.PARAM_UNIQUE,
-                self.tr('Ensure unique names (append _1, _2 if needed)'),
-                defaultValue=True
+                self.tr("Ensure unique names (append _1, _2 if needed)"),
+                defaultValue=True,
             )
         )
 
         # Outputs
-        self.addOutput(QgsProcessingOutputNumber(self.OUTPUT_COUNT, self.tr('Renamed layers count')))
-        self.addOutput(QgsProcessingOutputString(self.OUTPUT_LOG, self.tr('Rename log')))
+        self.addOutput(
+            QgsProcessingOutputNumber(
+                self.OUTPUT_COUNT, self.tr("Renamed layers count")
+            )
+        )
+        self.addOutput(
+            QgsProcessingOutputString(self.OUTPUT_LOG, self.tr("Rename log"))
+        )
 
     # --- Helpers ---
 
@@ -184,15 +193,15 @@ class RenameLayersByPattern(QgsProcessingAlgorithm):
         """
         res = []
         for ch in pattern:
-            if ch == '*':
-                res.append('(.*)')
-            elif ch == '?':
-                res.append('(.)')
+            if ch == "*":
+                res.append("(.*)")
+            elif ch == "?":
+                res.append("(.)")
             else:
                 res.append(re.escape(ch))
-        expr = ''.join(res)
+        expr = "".join(res)
         if anchor:
-            expr = '^' + expr + '$'
+            expr = "^" + expr + "$"
         return expr
 
     @staticmethod
@@ -213,15 +222,19 @@ class RenameLayersByPattern(QgsProcessingAlgorithm):
             i += 1
 
     def processAlgorithm(self, parameters, context, feedback):
-        use_selected = self.parameterAsBool(parameters, self.PARAM_USE_SELECTED, context)
+        use_selected = self.parameterAsBool(
+            parameters, self.PARAM_USE_SELECTED, context
+        )
         layers_param = self.parameterAsLayerList(parameters, self.PARAM_LAYERS, context)
         mode_index = self.parameterAsInt(parameters, self.PARAM_MODE, context)
-        pattern = self.parameterAsString(parameters, self.PARAM_PATTERN, context) or ''
-        replacement = self.parameterAsString(parameters, self.PARAM_REPLACEMENT, context) or ''
+        pattern = self.parameterAsString(parameters, self.PARAM_PATTERN, context) or ""
+        replacement = (
+            self.parameterAsString(parameters, self.PARAM_REPLACEMENT, context) or ""
+        )
         case_sensitive = self.parameterAsBool(parameters, self.PARAM_CASE, context)
         anchor_whole = self.parameterAsBool(parameters, self.PARAM_ANCHOR, context)
-        prefix = self.parameterAsString(parameters, self.PARAM_PREFIX, context) or ''
-        suffix = self.parameterAsString(parameters, self.PARAM_SUFFIX, context) or ''
+        prefix = self.parameterAsString(parameters, self.PARAM_PREFIX, context) or ""
+        suffix = self.parameterAsString(parameters, self.PARAM_SUFFIX, context) or ""
         preview_only = self.parameterAsBool(parameters, self.PARAM_PREVIEW, context)
         ensure_unique = self.parameterAsBool(parameters, self.PARAM_UNIQUE, context)
 
@@ -232,6 +245,7 @@ class RenameLayersByPattern(QgsProcessingAlgorithm):
         if use_selected:
             try:
                 from qgis.utils import iface
+
                 if iface is not None and iface.layerTreeView() is not None:
                     iface_layers = iface.layerTreeView().selectedLayers()
             except Exception:
@@ -243,32 +257,40 @@ class RenameLayersByPattern(QgsProcessingAlgorithm):
             # Fallback to provided list
             if not layers_param:
                 raise QgsProcessingException(
-                    'No layers selected in the Layers panel and no layers were provided in the parameter.'
+                    "No layers selected in the Layers panel and no layers were provided in the parameter."
                 )
-            target_layers = [lyr for lyr in layers_param if isinstance(lyr, QgsMapLayer)]
+            target_layers = [
+                lyr for lyr in layers_param if isinstance(lyr, QgsMapLayer)
+            ]
 
         # Compile regex if pattern provided
         regex = None
         regex_str = None
         if pattern:
             flags = 0 if case_sensitive else re.IGNORECASE
-            mode = self.MODES[mode_index] if 0 <= mode_index < len(self.MODES) else 'Wildcard'
+            mode = (
+                self.MODES[mode_index]
+                if 0 <= mode_index < len(self.MODES)
+                else "Wildcard"
+            )
 
-            if mode == 'Wildcard':
-                regex_str = self.wildcard_to_regex_with_groups(pattern, anchor=anchor_whole)
+            if mode == "Wildcard":
+                regex_str = self.wildcard_to_regex_with_groups(
+                    pattern, anchor=anchor_whole
+                )
             else:  # Regex
                 regex_str = pattern
                 if anchor_whole:
                     # Enforce full-name match regardless of user anchors
-                    if not regex_str.startswith('^'):
-                        regex_str = '^' + regex_str
-                    if not regex_str.endswith('$'):
-                        regex_str = regex_str + '$'
+                    if not regex_str.startswith("^"):
+                        regex_str = "^" + regex_str
+                    if not regex_str.endswith("$"):
+                        regex_str = regex_str + "$"
 
             try:
                 regex = re.compile(regex_str, flags)
             except re.error as err:
-                raise QgsProcessingException(f'Invalid regular expression: {err}')
+                raise QgsProcessingException(f"Invalid regular expression: {err}")
 
         # Prepare name set for uniqueness (all existing layer names at start)
         all_layers = list(QgsProject.instance().mapLayers().values())
@@ -304,10 +326,7 @@ class RenameLayersByPattern(QgsProcessingAlgorithm):
             else:
                 rename_log_lines.append(f'"{old_name}"  (unchanged)')
 
-        log_text = '\n'.join(rename_log_lines)
-        feedback.pushInfo('Rename results:\n' + log_text)
+        log_text = "\n".join(rename_log_lines)
+        feedback.pushInfo("Rename results:\n" + log_text)
 
-        return {
-            self.OUTPUT_COUNT: renamed_count,
-            self.OUTPUT_LOG: log_text
-        }
+        return {self.OUTPUT_COUNT: renamed_count, self.OUTPUT_LOG: log_text}

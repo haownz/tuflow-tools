@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 """
 TUFLOW Status Monitor (auto-follow latest .tsf; tail matching .tlf)
@@ -13,23 +12,34 @@ TUFLOW Status Monitor (auto-follow latest .tsf; tail matching .tlf)
 
 Tested on QGIS 3.44 (PyQGIS), using FlagNoThreading to safely create GUI from a Processing alg.
 """
-from qgis.PyQt import QtCore, QtGui, QtWidgets
+
+from qgis.PyQt import QtCore, QtGui
 from qgis.PyQt.QtCore import Qt, QTimer, QDateTime, QSettings, QRegExp
 from qgis.PyQt.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QLabel, QProgressBar, QPushButton, QPlainTextEdit,
-    QComboBox, QSpinBox, QCheckBox, QFileDialog, QSizePolicy
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QFormLayout,
+    QLabel,
+    QProgressBar,
+    QPushButton,
+    QPlainTextEdit,
+    QComboBox,
+    QSpinBox,
+    QCheckBox,
+    QFileDialog,
+    QSizePolicy,
 )
 from qgis.PyQt.QtGui import (
-    QColor, QSyntaxHighlighter, QTextCharFormat, QBrush, QFont, QTextCursor
+    QColor,
+    QSyntaxHighlighter,
+    QTextCharFormat,
+    QBrush,
+    QFont,
+    QTextCursor,
 )
 from qgis.core import (
-    QgsProcessing,
     QgsProcessingAlgorithm,
-    QgsProcessingParameterFile,
-    QgsProcessingParameterNumber,
-    QgsProcessingParameterBoolean,
-    QgsProcessingOutputBoolean,
     QgsMessageLog,
     Qgis,
     QgsProcessingException,
@@ -41,11 +51,12 @@ import re
 MONITOR_WINDOWS = []
 
 # Settings keys
-SETTINGS_KEY_LOG_DIR    = "TUFLOW/LogFolder"
-SETTINGS_KEY_REFRESH    = "TUFLOW/RefreshSecs"
-SETTINGS_KEY_AUTOCLOSE  = "TUFLOW/AutoCloseWhenFinished"
-SETTINGS_KEY_FOLLOW     = "TUFLOW/FollowLatestTSF"
+SETTINGS_KEY_LOG_DIR = "TUFLOW/LogFolder"
+SETTINGS_KEY_REFRESH = "TUFLOW/RefreshSecs"
+SETTINGS_KEY_AUTOCLOSE = "TUFLOW/AutoCloseWhenFinished"
+SETTINGS_KEY_FOLLOW = "TUFLOW/FollowLatestTSF"
 SETTINGS_KEY_TAIL_LINES = "TUFLOW/MonitorTailLines"
+
 
 # -------------------------
 # Helpers
@@ -57,30 +68,33 @@ def _safe_tail_read(path, max_bytes=200 * 1024):
     """
     try:
         size = os.path.getsize(path)
-        with open(path, 'rb') as f:
+        with open(path, "rb") as f:
             if size > max_bytes:
                 f.seek(-max_bytes, os.SEEK_END)
             data = f.read()
-        text = data.decode('utf-8', errors='ignore')
+        text = data.decode("utf-8", errors="ignore")
         # Drop partial first line so we return complete lines
-        i = text.find('\n')
-        return text[i + 1:] if i >= 0 else text
+        i = text.find("\n")
+        return text[i + 1 :] if i >= 0 else text
     except Exception as e:
-        QgsMessageLog.logMessage(f"TUFLOW Monitor: read error: {e}",
-                                 "TUFLOW Monitor", Qgis.Warning)
+        QgsMessageLog.logMessage(
+            f"TUFLOW Monitor: read error: {e}", "TUFLOW Monitor", Qgis.Warning
+        )
         return ""
+
 
 def _parse_key_values(text):
     """
     Parse TUFLOW 'Key == Value' lines and keep last occurrence of each key.
     """
     kv = {}
-    pat = re.compile(r'^\s*(.*?)\s*==\s*(.*)\s*$')
+    pat = re.compile(r"^\s*(.*?)\s*==\s*(.*)\s*$")
     for line in text.splitlines():
         m = pat.match(line)
         if m:
             kv[m.group(1).strip()] = m.group(2).strip()
     return kv
+
 
 def _num(value, default=None):
     """
@@ -89,9 +103,10 @@ def _num(value, default=None):
     if value is None:
         return default
     try:
-        return float(re.sub(r'[^0-9.\-]', '', str(value)))
+        return float(re.sub(r"[^0-9.\-]", "", str(value)))
     except Exception:
         return default
+
 
 def hours_to_hhmmss(value):
     """
@@ -106,6 +121,7 @@ def hours_to_hhmmss(value):
     ss = total % 60
     return f"{hhh:02d}:{mm:02d}:{ss:02d}"
 
+
 def secs_to_hhmmss(value):
     """
     Convert seconds to 'hh:mm:ss'. Returns None if not parseable.
@@ -118,6 +134,7 @@ def secs_to_hhmmss(value):
     mm = (total % 3600) // 60
     ss = total % 60
     return f"{hhh:02d}:{mm:02d}:{ss:02d}"
+
 
 def _find_latest_tsf(dir_path):
     """
@@ -142,9 +159,11 @@ def _find_latest_tsf(dir_path):
                     pass
         return latest
     except Exception as e:
-        QgsMessageLog.logMessage(f"TUFLOW Monitor: dir scan error: {e}",
-                                 "TUFLOW Monitor", Qgis.Warning)
+        QgsMessageLog.logMessage(
+            f"TUFLOW Monitor: dir scan error: {e}", "TUFLOW Monitor", Qgis.Warning
+        )
         return None
+
 
 def _corresponding_tlf(tsf_path):
     """
@@ -156,6 +175,7 @@ def _corresponding_tlf(tsf_path):
     base, _ = os.path.splitext(tsf_path)
     return base + ".tlf"
 
+
 # -------------------------
 # Syntax highlighter for log tail
 # -------------------------
@@ -164,9 +184,11 @@ class LogHighlighter(QSyntaxHighlighter):
     Colours important tokens in the tail log view (QPlainTextEdit).
     WARNING, CHECK, ERROR/FATAL/FAILED, Percentage Complete, FINISHED, etc.
     """
+
     def __init__(self, parent_document):
         super().__init__(parent_document)
         self.rules = []
+
         def fmt(color_hex, bold=False):
             f = QTextCharFormat()
             f.setForeground(QBrush(QColor(color_hex)))
@@ -176,14 +198,32 @@ class LogHighlighter(QSyntaxHighlighter):
 
         # Patterns (case-insensitive)
         self.rules += [
-            (QRegExp(r"\bERROR\b|\bFATAL\b|\bFAILED\b", Qt.CaseInsensitive), fmt("#c62828", True)),  # red
-            (QRegExp(r"\bWARNING[s]?\b", Qt.CaseInsensitive), fmt("#ef6c00", True)),                  # orange
-            (QRegExp(r"\bCHECK[s]?\b", Qt.CaseInsensitive), fmt("#6a1b9a", True)),                    # purple
-            (QRegExp(r"Percentage Complete\s*\(\%\)\s*\=\=\s*\d+(\.\d+)?", Qt.CaseInsensitive), fmt("#1565c0")),  # blue
-            (QRegExp(r"\bSimulation Status\s*\=\=\s*FINISHED\b", Qt.CaseInsensitive), fmt("#2e7d32", True)),      # green
+            (
+                QRegExp(r"\bERROR\b|\bFATAL\b|\bFAILED\b", Qt.CaseInsensitive),
+                fmt("#c62828", True),
+            ),  # red
+            (
+                QRegExp(r"\bWARNING[s]?\b", Qt.CaseInsensitive),
+                fmt("#ef6c00", True),
+            ),  # orange
+            (
+                QRegExp(r"\bCHECK[s]?\b", Qt.CaseInsensitive),
+                fmt("#6a1b9a", True),
+            ),  # purple
+            (
+                QRegExp(
+                    r"Percentage Complete\s*\(\%\)\s*\=\=\s*\d+(\.\d+)?",
+                    Qt.CaseInsensitive,
+                ),
+                fmt("#1565c0"),
+            ),  # blue
+            (
+                QRegExp(r"\bSimulation Status\s*\=\=\s*FINISHED\b", Qt.CaseInsensitive),
+                fmt("#2e7d32", True),
+            ),  # green
             # Additional keywords for TUFLOW log lines
             (QRegExp(r"SIM:"), fmt("#1565c0")),  # blue for SIM
-            (QRegExp(r"-d"), fmt("#1565c0")),    # blue for -d
+            (QRegExp(r"-d"), fmt("#1565c0")),  # blue for -d
             (QRegExp(r"\b0D\b"), fmt("#2e7d32")),  # green for 0D
             (QRegExp(r"\b1D\b"), fmt("#2e7d32")),  # green for 1D
             (QRegExp(r"\b2D\b"), fmt("#2e7d32")),  # green for 2D
@@ -192,9 +232,9 @@ class LogHighlighter(QSyntaxHighlighter):
             (QRegExp(r"\bVo\b"), fmt("#6a1b9a")),  # purple for Vo
             (QRegExp(r"\bdV\b"), fmt("#6a1b9a")),  # purple for dV
             (QRegExp(r"\bQuadtree\b"), fmt("#ef6c00")),  # orange for Quadtree
-            (QRegExp(r"\bOutput\b"), fmt("#ef6c00")),    # orange for Output
-            (QRegExp(r"\bClock\b"), fmt("#ef6c66")),     # orange for Clock
-            (QRegExp(r"\bCPU\b"), fmt("#ef6cff")),       # orange for CPU
+            (QRegExp(r"\bOutput\b"), fmt("#ef6c00")),  # orange for Output
+            (QRegExp(r"\bClock\b"), fmt("#ef6c66")),  # orange for Clock
+            (QRegExp(r"\bCPU\b"), fmt("#ef6cff")),  # orange for CPU
         ]
 
     def highlightBlock(self, text):
@@ -205,12 +245,20 @@ class LogHighlighter(QSyntaxHighlighter):
                 self.setFormat(i, length, fmt)
                 i = rx.indexIn(text, i + length)
 
+
 # -------------------------
 # Monitor Dialog
 # -------------------------
 class TuflowMonitorWidget(QDialog):
-    def __init__(self, dir_path, refresh_secs=10, auto_close=False, follow_latest=True,
-                 tail_lines=30, parent=None):
+    def __init__(
+        self,
+        dir_path,
+        refresh_secs=10,
+        auto_close=False,
+        follow_latest=True,
+        tail_lines=30,
+        parent=None,
+    ):
         super().__init__(parent)
         self.setWindowTitle("TUFLOW Running Status Monitor")
         self.setWindowFlag(Qt.WindowStaysOnTopHint, True)
@@ -231,9 +279,15 @@ class TuflowMonitorWidget(QDialog):
         # Folder + scenario info
         info = QFormLayout()
         self.lbl_dir = QLabel(self.dir_path or "—")
-        scenario_name = os.path.splitext(os.path.basename(self.log_path))[0] if self.log_path else "—"
+        scenario_name = (
+            os.path.splitext(os.path.basename(self.log_path))[0]
+            if self.log_path
+            else "—"
+        )
         self.lbl_scenario = QLabel(scenario_name)
-        self.lbl_scenario.setStyleSheet("color: #455a64; font-weight: 600;")  # blue-grey
+        self.lbl_scenario.setStyleSheet(
+            "color: #455a64; font-weight: 600;"
+        )  # blue-grey
         info.addRow("Current Scenario:", self.lbl_scenario)
         main.addLayout(info)
 
@@ -369,21 +423,33 @@ class TuflowMonitorWidget(QDialog):
 
     def _set_progress_style(self, p: float):
         if p >= 99.9:
-            style = ("QProgressBar { text-align: center; } "
-                     "QProgressBar::chunk { background-color: #2e7d32; }")
+            style = (
+                "QProgressBar { text-align: center; } "
+                "QProgressBar::chunk { background-color: #2e7d32; }"
+            )
         elif p >= 75:
-            style = ("QProgressBar { text-align: center; } "
-                     "QProgressBar::chunk { background-color: #43a047; }")
+            style = (
+                "QProgressBar { text-align: center; } "
+                "QProgressBar::chunk { background-color: #43a047; }"
+            )
         elif p >= 50:
-            style = ("QProgressBar { text-align: center; } "
-                     "QProgressBar::chunk { background-color: #1e88e5; }")
+            style = (
+                "QProgressBar { text-align: center; } "
+                "QProgressBar::chunk { background-color: #1e88e5; }"
+            )
         else:
-            style = ("QProgressBar { text-align: center; } "
-                     "QProgressBar::chunk { background-color: #90caf9; }")
+            style = (
+                "QProgressBar { text-align: center; } "
+                "QProgressBar::chunk { background-color: #90caf9; }"
+            )
         self.progress.setStyleSheet(style)
 
     def _maybe_switch_latest(self):
-        if not self.follow_latest or not self.dir_path or not os.path.isdir(self.dir_path):
+        if (
+            not self.follow_latest
+            or not self.dir_path
+            or not os.path.isdir(self.dir_path)
+        ):
             return
         latest = _find_latest_tsf(self.dir_path)
         if latest and latest != self.log_path:
@@ -392,8 +458,11 @@ class TuflowMonitorWidget(QDialog):
             scenario_name = os.path.splitext(os.path.basename(self.log_path))[0]
             self._set(self.lbl_scenario, scenario_name)
             self.tail.clear()
-            QgsMessageLog.logMessage(f"TUFLOW Monitor: switched to latest {self.log_path}",
-                                     "TUFLOW Monitor", Qgis.Info)
+            QgsMessageLog.logMessage(
+                f"TUFLOW Monitor: switched to latest {self.log_path}",
+                "TUFLOW Monitor",
+                Qgis.Info,
+            )
 
     def _scroll_tail_to_bottom(self):
         """Ensure the tail view is scrolled to the bottom (latest content visible)."""
@@ -420,7 +489,10 @@ class TuflowMonitorWidget(QDialog):
                 self.progress.setFormat("0%")
                 self._set_progress_style(0.0)
                 self.tail.setPlainText("")
-                self._set(self.lbl_updated, QDateTime.currentDateTime().toString("ddd, dd MMM yyyy • HH:mm:ss"))
+                self._set(
+                    self.lbl_updated,
+                    QDateTime.currentDateTime().toString("ddd, dd MMM yyyy • HH:mm:ss"),
+                )
                 self._scroll_tail_to_bottom()
                 return
 
@@ -428,7 +500,10 @@ class TuflowMonitorWidget(QDialog):
             text_tsf = _safe_tail_read(self.log_path)
             if not text_tsf:
                 self._set_coloured_status("Unreadable .tsf")
-                self._set(self.lbl_updated, QDateTime.currentDateTime().toString("ddd, dd MMM yyyy • HH:mm:ss"))
+                self._set(
+                    self.lbl_updated,
+                    QDateTime.currentDateTime().toString("ddd, dd MMM yyyy • HH:mm:ss"),
+                )
                 self._scroll_tail_to_bottom()
                 return
 
@@ -498,13 +573,18 @@ class TuflowMonitorWidget(QDialog):
             if self.tlf_path and os.path.exists(self.tlf_path):
                 tlf_text = _safe_tail_read(self.tlf_path)
             else:
-                tlf_text = f"(No matching .tlf found for {os.path.basename(self.log_path)})"
+                tlf_text = (
+                    f"(No matching .tlf found for {os.path.basename(self.log_path)})"
+                )
 
             lines = tlf_text.splitlines()
-            self.tail.setPlainText("\n".join(lines[-self.tail_lines:]))
+            self.tail.setPlainText("\n".join(lines[-self.tail_lines :]))
 
             # Friendly timestamp
-            self._set(self.lbl_updated, QDateTime.currentDateTime().toString("ddd, dd MMM yyyy • HH:mm:ss"))
+            self._set(
+                self.lbl_updated,
+                QDateTime.currentDateTime().toString("ddd, dd MMM yyyy • HH:mm:ss"),
+            )
 
             # Auto-scroll to bottom after content update
             self._scroll_tail_to_bottom()
@@ -526,6 +606,7 @@ class TuflowMonitorWidget(QDialog):
         except ValueError:
             pass
         super().closeEvent(ev)
+
 
 # -------------------------
 # Input Dialog with History
@@ -552,7 +633,7 @@ class TuflowLogMonitorInputDialog(QDialog):
         self.btn_browse = QPushButton("Browse...")
         folder_layout.addWidget(self.combo_folder)
         folder_layout.addWidget(self.btn_browse)
-        
+
         vbox_folder = QVBoxLayout()
         vbox_folder.setSpacing(2)
         vbox_folder.addWidget(QLabel("TUFLOW Log Folder:"))
@@ -566,20 +647,20 @@ class TuflowLogMonitorInputDialog(QDialog):
         self.spin_refresh = QSpinBox()
         self.spin_refresh.setRange(1, 86400)
         self.spin_refresh.setSuffix(" s")
-        
+
         self.chk_autoclose = QCheckBox("Auto-close when FINISHED")
         self.chk_follow = QCheckBox("Follow latest .tsf")
-        
+
         self.spin_tail = QSpinBox()
         self.spin_tail.setRange(1, 2000)
-        
+
         form.addRow("Refresh Interval:", self.spin_refresh)
         form.addRow("", self.chk_autoclose)
         form.addRow("", self.chk_follow)
         form.addRow("Tail Lines:", self.spin_tail)
-        
+
         layout.addLayout(form)
-        
+
         # Buttons
         btns = QHBoxLayout()
         btns.addStretch()
@@ -604,13 +685,14 @@ class TuflowLogMonitorInputDialog(QDialog):
         s = QSettings()
         # History
         history = s.value("TUFLOW/LogFolderHistory", [], type=list)
-        if not isinstance(history, list): history = []
-        
+        if not isinstance(history, list):
+            history = []
+
         # Legacy single value check
         last_dir = s.value(SETTINGS_KEY_LOG_DIR, "", type=str)
         if last_dir and last_dir not in history:
             history.insert(0, last_dir)
-            
+
         self.combo_folder.clear()
         self.combo_folder.addItems([str(x) for x in history])
         if history:
@@ -619,46 +701,52 @@ class TuflowLogMonitorInputDialog(QDialog):
             self.combo_folder.setEditText(last_dir)
 
         # Others
-        try: ref = int(s.value(SETTINGS_KEY_REFRESH, 10))
-        except: ref = 10
+        try:
+            ref = int(s.value(SETTINGS_KEY_REFRESH, 10))
+        except Exception:
+            ref = 10
         self.spin_refresh.setValue(ref)
-        
+
         self.chk_autoclose.setChecked(s.value(SETTINGS_KEY_AUTOCLOSE, False, type=bool))
         self.chk_follow.setChecked(s.value(SETTINGS_KEY_FOLLOW, True, type=bool))
-        
-        try: tl = int(s.value(SETTINGS_KEY_TAIL_LINES, 30))
-        except: tl = 30
+
+        try:
+            tl = int(s.value(SETTINGS_KEY_TAIL_LINES, 30))
+        except Exception:
+            tl = 30
         self.spin_tail.setValue(tl)
 
     def save_settings(self):
         s = QSettings()
         current_path = self.combo_folder.currentText().strip()
-        
+
         # Update history
         history = s.value("TUFLOW/LogFolderHistory", [], type=list)
-        if not isinstance(history, list): history = []
-        
+        if not isinstance(history, list):
+            history = []
+
         # Remove if exists to move to top
         if current_path in history:
             history.remove(current_path)
         history.insert(0, current_path)
-        history = history[:20] # Keep max 20
-        
+        history = history[:20]  # Keep max 20
+
         s.setValue("TUFLOW/LogFolderHistory", history)
         s.setValue(SETTINGS_KEY_LOG_DIR, current_path)
-        
+
         s.setValue(SETTINGS_KEY_REFRESH, self.spin_refresh.value())
         s.setValue(SETTINGS_KEY_AUTOCLOSE, self.chk_autoclose.isChecked())
         s.setValue(SETTINGS_KEY_FOLLOW, self.chk_follow.isChecked())
         s.setValue(SETTINGS_KEY_TAIL_LINES, self.spin_tail.value())
-        
+
         return {
-            'dir': current_path,
-            'refresh': self.spin_refresh.value(),
-            'autoclose': self.chk_autoclose.isChecked(),
-            'follow': self.chk_follow.isChecked(),
-            'tail': self.spin_tail.value()
+            "dir": current_path,
+            "refresh": self.spin_refresh.value(),
+            "autoclose": self.chk_autoclose.isChecked(),
+            "follow": self.chk_follow.isChecked(),
+            "tail": self.spin_tail.value(),
         }
+
 
 # -------------------------
 # Processing Algorithm
@@ -673,14 +761,24 @@ class TuflowLogMonitorAlgorithm(QgsProcessingAlgorithm):
     PARAM_TAIL = "TAIL_LINES"
     OUT_OPENED = "MONITOR_OPENED"
 
-    def name(self): return ""
-    def displayName(self): return self.TITLE
-    def group(self): return self.GROUP
-    def groupId(self): return "configuration"
+    def name(self):
+        return ""
+
+    def displayName(self):
+        return self.TITLE
+
+    def group(self):
+        return self.GROUP
+
+    def groupId(self):
+        return "configuration"
+
     def shortHelpString(self):
-        return ("Select a TUFLOW log folder. The monitor follows the latest *.tsf "
-                "and shows the tail of its matching *.tlf. Updates on a set interval.\n"
-                "Times shown as hh:mm:ss only. Status and log lines are colour-highlighted.")
+        return (
+            "Select a TUFLOW log folder. The monitor follows the latest *.tsf "
+            "and shows the tail of its matching *.tlf. Updates on a set interval.\n"
+            "Times shown as hh:mm:ss only. Status and log lines are colour-highlighted."
+        )
 
     # IMPORTANT: run on main GUI thread (safe to create/update Qt widgets)
     def flags(self):
@@ -691,25 +789,30 @@ class TuflowLogMonitorAlgorithm(QgsProcessingAlgorithm):
 
     def processAlgorithm(self, parameters, context, feedback):
         from qgis.utils import iface
+
         dlg = TuflowLogMonitorInputDialog(iface.mainWindow())
         if dlg.exec_() != QDialog.Accepted:
             return {}
-        
+
         vals = dlg.save_settings()
-        
-        dir_path = vals['dir']
-        refresh = vals['refresh']
-        auto_close = vals['autoclose']
-        follow_latest = vals['follow']
-        tail_lines = vals['tail']
+
+        dir_path = vals["dir"]
+        refresh = vals["refresh"]
+        auto_close = vals["autoclose"]
+        follow_latest = vals["follow"]
+        tail_lines = vals["tail"]
 
         if not dir_path or not os.path.isdir(dir_path):
             raise QgsProcessingException("Log folder not found.")
 
         # Create the monitor window (non-modal) and return immediately
-        w = TuflowMonitorWidget(dir_path, refresh_secs=refresh,
-                                auto_close=auto_close, follow_latest=follow_latest,
-                                tail_lines=tail_lines)
+        w = TuflowMonitorWidget(
+            dir_path,
+            refresh_secs=refresh,
+            auto_close=auto_close,
+            follow_latest=follow_latest,
+            tail_lines=tail_lines,
+        )
         w.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
         w.show()
         MONITOR_WINDOWS.append(w)
@@ -720,4 +823,5 @@ class TuflowLogMonitorAlgorithm(QgsProcessingAlgorithm):
         )
         return {self.OUT_OPENED: True}
 
-    def createInstance(self): return TuflowLogMonitorAlgorithm()
+    def createInstance(self):
+        return TuflowLogMonitorAlgorithm()

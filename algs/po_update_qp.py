@@ -1,27 +1,48 @@
 # -*- coding: utf-8 -*-
 from qgis.PyQt.QtCore import QVariant, QSettings
 from qgis.core import (
-    QgsProcessing, QgsProcessingAlgorithm, QgsProcessingException,
-    QgsProcessingParameterRasterLayer, QgsProcessingParameterVectorLayer,
-    QgsProcessingParameterString, QgsProcessingParameterNumber, QgsProcessingParameterEnum,
-    QgsVectorLayer, QgsRasterLayer, QgsProject, QgsField
+    QgsProcessingAlgorithm,
+    QgsProcessingException,
+    QgsProcessingParameterRasterLayer,
+    QgsProcessingParameterVectorLayer,
+    QgsProcessingParameterString,
+    QgsProcessingParameterNumber,
+    QgsProcessingParameterEnum,
+    QgsVectorLayer,
+    QgsRasterLayer,
+    QgsProject,
+    QgsField,
 )
 from .po_common import (
-    guess_selected_raster, derive_poline_path_from_raster, load_vector_with_fallback,
-    resolve_csv_paths_from_layer, compute_max_map_for_csv, normalize_id
+    guess_selected_raster,
+    derive_poline_path_from_raster,
+    load_vector_with_fallback,
+    resolve_csv_paths_from_layer,
+    compute_max_map_for_csv,
+    normalize_id,
 )
-import os, math, re, csv
+import os
+import math
+import re
+import csv
+
 
 def guess_selected_vector():
     """Try to return the currently active vector layer (line geometry) from the QGIS interface."""
     try:
         from qgis.utils import iface
+
         layer = iface.activeLayer()
-        if isinstance(layer, QgsVectorLayer) and layer.isValid() and layer.geometryType() == 1:
+        if (
+            isinstance(layer, QgsVectorLayer)
+            and layer.isValid()
+            and layer.geometryType() == 1
+        ):
             return layer
     except Exception:
         pass
     return None
+
 
 REL_DIR_DEFAULT = r"..\\csv"
 SETTINGS_KEY_SUFFIX = "po/suffix_pattern"
@@ -29,6 +50,7 @@ SKIP_COLS_DEFAULT = 2
 ID_FIELD_DEFAULT = "ID"
 FLOW_FIELD_DEFAULT = "QP"
 UPDATE_SCOPES = ["auto", "selected", "all"]
+
 
 class POUpdateQPAlgorithm(QgsProcessingAlgorithm):
     P_RASTER = "RASTER"
@@ -45,10 +67,17 @@ class POUpdateQPAlgorithm(QgsProcessingAlgorithm):
 
     ALG_ID = "po_update_qp"
 
-    def name(self): return self.ALG_ID
-    def displayName(self): return "Update QP/QV"
-    def group(self): return "PO tools"
-    def groupId(self): return "po_tools"
+    def name(self):
+        return self.ALG_ID
+
+    def displayName(self):
+        return "Update QP/QV"
+
+    def group(self):
+        return "PO tools"
+
+    def groupId(self):
+        return "po_tools"
 
     def shortHelpString(self):
         return (
@@ -62,61 +91,106 @@ class POUpdateQPAlgorithm(QgsProcessingAlgorithm):
 
     def initAlgorithm(self, config=None):
         default_suffix = QSettings().value(SETTINGS_KEY_SUFFIX, "_d_*.tif", type=str)
-        self.addParameter(QgsProcessingParameterRasterLayer(
-            self.P_RASTER, "Raster (optional; used only if PO line vector is empty)",
-            optional=True, defaultValue=guess_selected_raster()
-        ))
-        self.addParameter(QgsProcessingParameterVectorLayer(
-            self.P_VECTOR, "PO line vector (optional; overrides Raster if provided)",
-            optional=True, defaultValue=guess_selected_vector()
-        ))
-        self.addParameter(QgsProcessingParameterString(
-            self.P_SUFFIX, "Suffix pattern for raster-derived PO line",
-            defaultValue=default_suffix
-        ))
-        self.addParameter(QgsProcessingParameterString(
-            self.P_ID, "ID field", defaultValue=ID_FIELD_DEFAULT
-        ))
-        self.addParameter(QgsProcessingParameterString(
-            self.P_FLOW, "Flow field (to write)", defaultValue=FLOW_FIELD_DEFAULT
-        ))
-        self.addParameter(QgsProcessingParameterString(
-            self.P_REL, "Relative CSV folder", defaultValue=REL_DIR_DEFAULT
-        ))
-        self.addParameter(QgsProcessingParameterNumber(
-            self.P_SKIP, "Non-data columns at start (SKIP_COLS)",
-            QgsProcessingParameterNumber.Integer, defaultValue=SKIP_COLS_DEFAULT, minValue=0
-        ))
-        self.addParameter(QgsProcessingParameterEnum(
-            self.P_SCOPE, "Update scope", options=UPDATE_SCOPES, defaultValue=0
-        ))
-        self.addParameter(QgsProcessingParameterString(
-            self.P_PREF, "CSV preference order (comma separated)", defaultValue="1d,2d"
-        ))
-        self.addParameter(QgsProcessingParameterString(
-            self.P_SRC, "Optional field to store CSV source (blank to skip)",
-            optional=True, defaultValue=""
-        ))
-        self.addParameter(QgsProcessingParameterString(
-            self.P_QV, "Volume field (leave blank to skip writing QV)",
-            optional=True, defaultValue="QV"
-        ))
+        self.addParameter(
+            QgsProcessingParameterRasterLayer(
+                self.P_RASTER,
+                "Raster (optional; used only if PO line vector is empty)",
+                optional=True,
+                defaultValue=guess_selected_raster(),
+            )
+        )
+        self.addParameter(
+            QgsProcessingParameterVectorLayer(
+                self.P_VECTOR,
+                "PO line vector (optional; overrides Raster if provided)",
+                optional=True,
+                defaultValue=guess_selected_vector(),
+            )
+        )
+        self.addParameter(
+            QgsProcessingParameterString(
+                self.P_SUFFIX,
+                "Suffix pattern for raster-derived PO line",
+                defaultValue=default_suffix,
+            )
+        )
+        self.addParameter(
+            QgsProcessingParameterString(
+                self.P_ID, "ID field", defaultValue=ID_FIELD_DEFAULT
+            )
+        )
+        self.addParameter(
+            QgsProcessingParameterString(
+                self.P_FLOW, "Flow field (to write)", defaultValue=FLOW_FIELD_DEFAULT
+            )
+        )
+        self.addParameter(
+            QgsProcessingParameterString(
+                self.P_REL, "Relative CSV folder", defaultValue=REL_DIR_DEFAULT
+            )
+        )
+        self.addParameter(
+            QgsProcessingParameterNumber(
+                self.P_SKIP,
+                "Non-data columns at start (SKIP_COLS)",
+                QgsProcessingParameterNumber.Integer,
+                defaultValue=SKIP_COLS_DEFAULT,
+                minValue=0,
+            )
+        )
+        self.addParameter(
+            QgsProcessingParameterEnum(
+                self.P_SCOPE, "Update scope", options=UPDATE_SCOPES, defaultValue=0
+            )
+        )
+        self.addParameter(
+            QgsProcessingParameterString(
+                self.P_PREF,
+                "CSV preference order (comma separated)",
+                defaultValue="1d,2d",
+            )
+        )
+        self.addParameter(
+            QgsProcessingParameterString(
+                self.P_SRC,
+                "Optional field to store CSV source (blank to skip)",
+                optional=True,
+                defaultValue="",
+            )
+        )
+        self.addParameter(
+            QgsProcessingParameterString(
+                self.P_QV,
+                "Volume field (leave blank to skip writing QV)",
+                optional=True,
+                defaultValue="QV",
+            )
+        )
 
     def processAlgorithm(self, parameters, context, feedback):
         # Persist suffix
-        suffix = self.parameterAsString(parameters, self.P_SUFFIX, context) or "_d_*.tif"
+        suffix = (
+            self.parameterAsString(parameters, self.P_SUFFIX, context) or "_d_*.tif"
+        )
         QSettings().setValue(SETTINGS_KEY_SUFFIX, suffix)
 
         # Prefer explicitly supplied PO line vector
         v = self.parameterAsVectorLayer(parameters, self.P_VECTOR, context)
         if v is None:
             # Fall back to raster -> derive PO line path
-            r = self.parameterAsRasterLayer(parameters, self.P_RASTER, context) or guess_selected_raster()
+            r = (
+                self.parameterAsRasterLayer(parameters, self.P_RASTER, context)
+                or guess_selected_raster()
+            )
             if not isinstance(r, QgsRasterLayer):
-                raise QgsProcessingException("Either PO line vector or raster is required.")
+                raise QgsProcessingException(
+                    "Either PO line vector or raster is required."
+                )
             src = (r.source() or "").splitlines()[0]
             if not os.path.exists(src):
-                raise QgsProcessingException(f"Selected raster is not a local file: {src}")
+                raise QgsProcessingException(
+                    f"Selected raster is not a local file: {src}"
+                )
             try:
                 po = derive_poline_path_from_raster(src, suffix)  # type: ignore
             except TypeError:
@@ -126,11 +200,15 @@ class POUpdateQPAlgorithm(QgsProcessingAlgorithm):
             v = load_vector_with_fallback(po, f"{r.name().strip()} poline")
             if not v or not v.isValid():
                 raise QgsProcessingException(f"Failed to open PO line: {po}")
-            feedback.pushInfo("PO line resolved from raster; original shapefile will not be modified.")
+            feedback.pushInfo(
+                "PO line resolved from raster; original shapefile will not be modified."
+            )
         else:
             if not isinstance(v, QgsVectorLayer) or not v.isValid():
                 raise QgsProcessingException("Provided PO line vector is invalid.")
-            feedback.pushInfo("PO line vector provided; raster parameter will be ignored.")
+            feedback.pushInfo(
+                "PO line vector provided; raster parameter will be ignored."
+            )
 
         # Keep a reference to the original layer for CSV resolution
         original_layer = v
@@ -139,10 +217,14 @@ class POUpdateQPAlgorithm(QgsProcessingAlgorithm):
         if v.providerType().lower() != "memory":
             temp_v = self._make_temp_copy(v)
             QgsProject.instance().addMapLayer(temp_v)
-            feedback.pushInfo(f"Created temporary layer '{temp_v.name()}' to write attributes (original not modified).")
+            feedback.pushInfo(
+                f"Created temporary layer '{temp_v.name()}' to write attributes (original not modified)."
+            )
             v = temp_v
         else:
-            feedback.pushInfo(f"Using provided in-memory layer '{v.name()}' for updates.")
+            feedback.pushInfo(
+                f"Using provided in-memory layer '{v.name()}' for updates."
+            )
 
         # Parameters for update
         id_field = self.parameterAsString(parameters, self.P_ID, context)
@@ -152,26 +234,44 @@ class POUpdateQPAlgorithm(QgsProcessingAlgorithm):
         scope = UPDATE_SCOPES[self.parameterAsEnum(parameters, self.P_SCOPE, context)]
         pref = self.parameterAsString(parameters, self.P_PREF, context)
         pref_order = [s.strip() for s in pref.split(",") if s.strip()] or ["1d", "2d"]
-        src_field = (self.parameterAsString(parameters, self.P_SRC, context) or "").strip() or None
-        qv_field = (self.parameterAsString(parameters, self.P_QV, context) or "").strip()
+        src_field = (
+            self.parameterAsString(parameters, self.P_SRC, context) or ""
+        ).strip() or None
+        qv_field = (
+            self.parameterAsString(parameters, self.P_QV, context) or ""
+        ).strip()
 
         # Validate ID field
         if id_field not in v.fields().names():
-            raise QgsProcessingException(f"Field '{id_field}' not found in layer '{v.name()}'.")
+            raise QgsProcessingException(
+                f"Field '{id_field}' not found in layer '{v.name()}'."
+            )
 
         # Resolve CSVs
-        resolver_layer = original_layer if (original_layer and original_layer.providerType().lower() != "memory") else v
-        csvs, tried, csv_dir, base_dir = resolve_csv_paths_from_layer(resolver_layer, rel_dir)
+        resolver_layer = (
+            original_layer
+            if (original_layer and original_layer.providerType().lower() != "memory")
+            else v
+        )
+        csvs, tried, csv_dir, base_dir = resolve_csv_paths_from_layer(
+            resolver_layer, rel_dir
+        )
 
         # Announce CSV presence
         one_d = csvs.get("1d")
         two_d = csvs.get("2d")
-        if one_d: feedback.pushInfo(f"[CSV] 1d found: {one_d}")
-        else:     feedback.reportError(f"[CSV] 1d not found (expected at: {tried.get('1d')})")
-        if two_d: feedback.pushInfo(f"[CSV] 2d found: {two_d}")
-        else:     feedback.reportError(f"[CSV] 2d not found (expected at: {tried.get('2d')})")
+        if one_d:
+            feedback.pushInfo(f"[CSV] 1d found: {one_d}")
+        else:
+            feedback.reportError(f"[CSV] 1d not found (expected at: {tried.get('1d')})")
+        if two_d:
+            feedback.pushInfo(f"[CSV] 2d found: {two_d}")
+        else:
+            feedback.reportError(f"[CSV] 2d not found (expected at: {tried.get('2d')})")
         if not (one_d or two_d):
-            msg = ["No CSV files found. Tried:"] + [f" - {k}: {p}" for k, p in tried.items()]
+            msg = ["No CSV files found. Tried:"] + [
+                f" - {k}: {p}" for k, p in tried.items()
+            ]
             msg.append(f"(Layer dir = {base_dir}) (Resolved csv dir = {csv_dir})")
             raise QgsProcessingException("\n".join(msg))
 
@@ -201,7 +301,9 @@ class POUpdateQPAlgorithm(QgsProcessingAlgorithm):
         # Ensure fields exist
         flow_idx = v.fields().indexOf(flow_field)
         if flow_idx == -1:
-            v.dataProvider().addAttributes([QgsField(flow_field, QVariant.Double, 'Double', 15, 5)])
+            v.dataProvider().addAttributes(
+                [QgsField(flow_field, QVariant.Double, "Double", 15, 5)]
+            )
             v.updateFields()
             flow_idx = v.fields().indexOf(flow_field)
 
@@ -218,7 +320,9 @@ class POUpdateQPAlgorithm(QgsProcessingAlgorithm):
             qv_idx = v.fields().indexOf(qv_field)
             if qv_idx == -1:
                 # If you want Double(10,0) instead, change to (10, 0) below:
-                v.dataProvider().addAttributes([QgsField(qv_field, QVariant.Double, 'Double', 15, 1)])
+                v.dataProvider().addAttributes(
+                    [QgsField(qv_field, QVariant.Double, "Double", 15, 1)]
+                )
                 v.updateFields()
                 qv_idx = v.fields().indexOf(qv_field)
 
@@ -303,30 +407,53 @@ class POUpdateQPAlgorithm(QgsProcessingAlgorithm):
             try:
                 ok = v.dataProvider().changeAttributeValues(changes)
                 if not ok:
-                    feedback.reportError("Provider failed to apply attribute changes (changeAttributeValues returned False).")
+                    feedback.reportError(
+                        "Provider failed to apply attribute changes (changeAttributeValues returned False)."
+                    )
             except Exception as e:
                 feedback.reportError(f"Exception while applying attribute changes: {e}")
         else:
             feedback.pushInfo("No attribute updates to apply.")
 
-        scope_label = ("selected features" if (scope == "selected" or (scope == "auto" and sel_ids)) else "all features")
-        feedback.pushInfo("Updated {} {} with '{}' (order {}).".format(updated_qp, scope_label, flow_field, pref_order))
+        scope_label = (
+            "selected features"
+            if (scope == "selected" or (scope == "auto" and sel_ids))
+            else "all features"
+        )
+        feedback.pushInfo(
+            "Updated {} {} with '{}' (order {}).".format(
+                updated_qp, scope_label, flow_field, pref_order
+            )
+        )
         if qv_idx != -1:
-            feedback.pushInfo("Updated {} {} with '{}' (single-dataset per ID, order {}).".format(updated_qv, scope_label, qv_field, pref_order))
+            feedback.pushInfo(
+                "Updated {} {} with '{}' (single-dataset per ID, order {}).".format(
+                    updated_qv, scope_label, qv_field, pref_order
+                )
+            )
         for t in ("1d", "2d"):
             if csvs.get(t):
                 feedback.pushInfo(" used {}: {}".format(t, csvs[t]))
         if unmatched_qp:
-            feedback.pushInfo("{} features had no QP match (first up to 10):".format(len(unmatched_qp)))
+            feedback.pushInfo(
+                "{} features had no QP match (first up to 10):".format(
+                    len(unmatched_qp)
+                )
+            )
             for fid, raw in unmatched_qp[:10]:
                 feedback.pushInfo(" feature {}: {}={!r}".format(fid, id_field, raw))
         if qv_idx != -1 and unmatched_qv:
-            feedback.pushInfo("{} features had no QV match (first up to 10):".format(len(unmatched_qv)))
+            feedback.pushInfo(
+                "{} features had no QV match (first up to 10):".format(
+                    len(unmatched_qv)
+                )
+            )
             for fid, raw in unmatched_qv[:10]:
                 feedback.pushInfo(" feature {}: {}={!r}".format(fid, id_field, raw))
         return {}
 
-    def createInstance(self): return POUpdateQPAlgorithm()
+    def createInstance(self):
+        return POUpdateQPAlgorithm()
 
     # --------------------------------------------------------------------------
     # Local fallback resolver
@@ -346,7 +473,9 @@ class POUpdateQPAlgorithm(QgsProcessingAlgorithm):
             match = pattern.match(fname)
             if not match:
                 raise QgsProcessingException(
-                    "Filename '{}' does not match suffix pattern '{}'.".format(fname, suffix)
+                    "Filename '{}' does not match suffix pattern '{}'.".format(
+                        fname, suffix
+                    )
                 )
             base = match.group(1)
         else:
@@ -369,7 +498,11 @@ class POUpdateQPAlgorithm(QgsProcessingAlgorithm):
         geom_map = {0: "Point", 1: "LineString", 2: "Polygon"}
         geom_name = geom_map.get(src_layer.geometryType(), "Unknown")
         uri = "{}?crs={}".format(geom_name, src_layer.crs().authid() or "")
-        base_name = os.path.splitext(os.path.basename(src_layer.source()))[0] if src_layer.source().lower().endswith(".shp") else src_layer.name().strip()
+        base_name = (
+            os.path.splitext(os.path.basename(src_layer.source()))[0]
+            if src_layer.source().lower().endswith(".shp")
+            else src_layer.name().strip()
+        )
         name = "{}_QP".format(base_name) if base_name else "PO line QP"
         mem = QgsVectorLayer(uri, name, "memory")
         if not mem.isValid():
@@ -382,9 +515,11 @@ class POUpdateQPAlgorithm(QgsProcessingAlgorithm):
         mem.updateExtents()
         return mem
 
+
 # ------------------------------------------------------------------------------
 # Helpers: robust CSV + ID variant expansion + volume integration
 # ------------------------------------------------------------------------------
+
 
 def _read_csv_rows(path):
     """
@@ -402,7 +537,11 @@ def _read_csv_rows(path):
         try:
             with open(path, "r", encoding=enc, newline="") as f:
                 text = f.read()
-            lines = [ln for ln in text.splitlines() if ln.strip() and not ln.strip().startswith(("#", "//"))]
+            lines = [
+                ln
+                for ln in text.splitlines()
+                if ln.strip() and not ln.strip().startswith(("#", "//"))
+            ]
             for d in delims:
                 try:
                     reader = csv.reader(lines, delimiter=d)
@@ -420,19 +559,26 @@ def _read_csv_rows(path):
     except Exception:
         return []
 
+
 def _digits_only(s):
     """Return the digits-only string from s, or None if no digits."""
-    if s is None: return None
+    if s is None:
+        return None
     m = re.findall(r"\d+", str(s))
     return "".join(m) if m else None
 
+
 def _debracket(s):
     """Strip trailing run suffix like ' [M01_001]' and leading 'Q ' prefix."""
-    if s is None: return ""
-    s2 = re.sub(r"^\s*Q\s+", "", str(s).strip(), flags=re.IGNORECASE)  # remove leading 'Q '
+    if s is None:
+        return ""
+    s2 = re.sub(
+        r"^\s*Q\s+", "", str(s).strip(), flags=re.IGNORECASE
+    )  # remove leading 'Q '
     s2 = re.split(r"\s*\[", s2)[0].strip()  # keep part before ' [ ... ]'
     s2 = s2.replace("  ", " ").strip()
     return s2
+
 
 def station_variants(strict_id):
     """
@@ -453,6 +599,7 @@ def station_variants(strict_id):
         variants.add("Q" + b)
         variants.add("Q " + b)
     return variants
+
 
 def id_variants(id_value, pad_widths=(2, 3, 4)):
     """
@@ -482,6 +629,7 @@ def id_variants(id_value, pad_widths=(2, 3, 4)):
         variants.add("Q " + b)
     return variants
 
+
 def _parse_time_token(token, unit_hint=None):
     """Parse a time token into seconds, using optional unit_hint ('h' or 'min')."""
     s = (token or "").strip()
@@ -489,21 +637,31 @@ def _parse_time_token(token, unit_hint=None):
         return None
     try:
         val = float(s)
-        if unit_hint == 'h':     return val * 3600.0
-        if unit_hint == 'min':   return val * 60.0
-        return val               # assume seconds
+        if unit_hint == "h":
+            return val * 3600.0
+        if unit_hint == "min":
+            return val * 60.0
+        return val  # assume seconds
     except Exception:
         pass
-    m = re.match(r"^\s*(\d+(?:\.\d+)?)\s*(s|sec|second|seconds|min|minutes|hr|hour|hours)?\s*$", s, re.IGNORECASE)
+    m = re.match(
+        r"^\s*(\d+(?:\.\d+)?)\s*(s|sec|second|seconds|min|minutes|hr|hour|hours)?\s*$",
+        s,
+        re.IGNORECASE,
+    )
     if m:
         val = float(m.group(1))
         unit = (m.group(2) or "").lower()
-        if unit.startswith("min"):            mult = 60.0
-        elif unit.startswith("hr") or unit.startswith("hour"): mult = 3600.0
-        else:                                 mult = 1.0
+        if unit.startswith("min"):
+            mult = 60.0
+        elif unit.startswith("hr") or unit.startswith("hour"):
+            mult = 3600.0
+        else:
+            mult = 1.0
         return val * mult
     m2 = re.search(r"(\d+(?:\.\d+)?)", s)
     return float(m2.group(1)) if m2 else None
+
 
 def _parse_time_header(header, skip_cols):
     """
@@ -514,13 +672,20 @@ def _parse_time_header(header, skip_cols):
     parsed_all = True
     for name in header[skip_cols:]:
         s = (name or "").strip()
-        m = re.match(r"^\s*(\d+(?:\.\d+)?)\s*(s|sec|second|seconds|min|minutes|hr|hour|hours)?\s*$", s, re.IGNORECASE)
+        m = re.match(
+            r"^\s*(\d+(?:\.\d+)?)\s*(s|sec|second|seconds|min|minutes|hr|hour|hours)?\s*$",
+            s,
+            re.IGNORECASE,
+        )
         if m:
             val = float(m.group(1))
             unit = (m.group(2) or "").lower()
-            if unit.startswith("min"):      mult = 60.0
-            elif unit.startswith("hr") or unit.startswith("hour"): mult = 3600.0
-            else:                           mult = 1.0
+            if unit.startswith("min"):
+                mult = 60.0
+            elif unit.startswith("hr") or unit.startswith("hour"):
+                mult = 3600.0
+            else:
+                mult = 1.0
             times.append(val * mult)
             continue
         m2 = re.search(r"(\d+(?:\.\d+)?)", s)
@@ -537,6 +702,7 @@ def _parse_time_header(header, skip_cols):
         note = "assuming Q in m³/s and time in seconds parsed from header"
     return times, note
 
+
 def _integrate_trapezoid(times, q_series):
     """Trapezoidal integration of discharge (m³/s) over time (s) -> volume (m³)."""
     if not times or len(times) < 2:
@@ -550,6 +716,7 @@ def _integrate_trapezoid(times, q_series):
         vol += 0.5 * (qi + qj) * max(0.0, dt)
     return vol
 
+
 def compute_volume_map_for_csv(path, skip_cols):
     """
     Read a TUFLOW-like Q.csv and return ({key_variant -> volume_m3}, note).
@@ -562,9 +729,9 @@ def compute_volume_map_for_csv(path, skip_cols):
         return {}, "empty or unreadable CSV"
 
     header = rows[0]
-    col_oriented = (len(header) > 1 and header[1].lower().startswith("time"))
+    col_oriented = len(header) > 1 and header[1].lower().startswith("time")
     if col_oriented:
-        unit_hint = 'h' if 'h' in header[1].lower() else None
+        unit_hint = "h" if "h" in header[1].lower() else None
         times = []
         for r in rows[1:]:
             tok = r[1] if len(r) > 1 else None
@@ -577,17 +744,19 @@ def compute_volume_map_for_csv(path, skip_cols):
         for j in range(skip_cols, len(header)):
             q_series = []
             for r in rows[1:]:
-                try:    q_series.append(float(r[j]))
-                except: q_series.append(0.0)
+                try:
+                    q_series.append(float(r[j]))
+                except Exception:
+                    q_series.append(0.0)
             vol = _integrate_trapezoid(times, q_series)
 
             # Use a clean station id extracted from header column
             raw = header[j]
-            clean = _debracket(raw)                  # "Q PL001 [M01_001]" -> "PL001"
-            for k in station_variants(clean):        # strict variants, NO digits-only
+            clean = _debracket(raw)  # "Q PL001 [M01_001]" -> "PL001"
+            for k in station_variants(clean):  # strict variants, NO digits-only
                 vol_map.setdefault(k, vol)
 
-        note = f"column-oriented; time from '{header[1]}' (unit {'h' if unit_hint=='h' else 's'})"
+        note = f"column-oriented; time from '{header[1]}' (unit {'h' if unit_hint == 'h' else 's'})"
         return vol_map, note
 
     # row-oriented fallback (legacy)
@@ -599,12 +768,15 @@ def compute_volume_map_for_csv(path, skip_cols):
         key_raw = (r[0] if len(r) > 0 else "").strip()
         data = []
         for s in r[skip_cols:]:
-            try:    data.append(float(s))
-            except: data.append(0.0)
+            try:
+                data.append(float(s))
+            except Exception:
+                data.append(0.0)
         vol = _integrate_trapezoid(times, data)
         for k in id_variants(key_raw):
             vol_map.setdefault(k, vol)
     return vol_map, f"row-oriented; {note_hdr}"
+
 
 def compute_total_volume_across_poline(csvs, skip_cols, pref_order, combine=False):
     """
@@ -617,17 +789,23 @@ def compute_total_volume_across_poline(csvs, skip_cols, pref_order, combine=Fals
     total = 0.0
     if csvs.get("1d"):
         vm, note = compute_volume_map_for_csv(csvs["1d"], skip_cols)
-        parts["1d"] = sum({k: v for k, v in vm.items() if not k.startswith("Q")}.values())  # avoid double-counting
+        parts["1d"] = sum(
+            {k: v for k, v in vm.items() if not k.startswith("Q")}.values()
+        )  # avoid double-counting
         notes.append(f"1d: {note}")
     if csvs.get("2d"):
         vm, note = compute_volume_map_for_csv(csvs["2d"], skip_cols)
-        parts["2d"] = sum({k: v for k, v in vm.items() if not k.startswith("Q")}.values())
+        parts["2d"] = sum(
+            {k: v for k, v in vm.items() if not k.startswith("Q")}.values()
+        )
         notes.append(f"2d: {note}")
 
     # prefer mode only
-    for tag in (pref_order or ["1d", "2d"]):
+    for tag in pref_order or ["1d", "2d"]:
         if tag in parts:
             total = parts[tag]
             break
-    note = "preferred dataset only; " + ("; ".join(notes) if notes else "no CSVs available")
+    note = "preferred dataset only; " + (
+        "; ".join(notes) if notes else "no CSVs available"
+    )
     return total, parts, note

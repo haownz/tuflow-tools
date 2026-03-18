@@ -1,28 +1,51 @@
 # -*- coding: utf-8 -*-
 from qgis.core import (
-    QgsProcessing, QgsProcessingAlgorithm, QgsProcessingException,
-    QgsProcessingParameterRasterLayer, QgsProcessingParameterVectorLayer, QgsProcessingParameterBoolean, QgsProcessingParameterString,
-    QgsRasterLayer, QgsProject, QgsMapLayer
+    QgsProcessingAlgorithm,
+    QgsProcessingException,
+    QgsProcessingParameterRasterLayer,
+    QgsProcessingParameterVectorLayer,
+    QgsProcessingParameterBoolean,
+    QgsProcessingParameterString,
+    QgsRasterLayer,
+    QgsProject,
+    QgsMapLayer,
 )
 from qgis.utils import iface
-from .po_common import (guess_selected_raster, derive_poline_path_from_raster, load_vector_with_fallback, clone_vector)
+from .po_common import (
+    guess_selected_raster,
+    derive_poline_path_from_raster,
+    load_vector_with_fallback,
+    clone_vector,
+)
 import os
 
+
 class POFilterZoomAlgorithm(QgsProcessingAlgorithm):
-    P_RASTER="RASTER"; P_VECTOR="VECTOR"; P_FILTERS="APPLY_FILTERS"; P_REMOVE="REMOVE_ORIG"
-    P_POLINE_SUFFIX="POLINE_SUFFIX"
+    P_RASTER = "RASTER"
+    P_VECTOR = "VECTOR"
+    P_FILTERS = "APPLY_FILTERS"
+    P_REMOVE = "REMOVE_ORIG"
+    P_POLINE_SUFFIX = "POLINE_SUFFIX"
 
     ALG_ID = "po_filter_zoom"
 
-    def name(self): return self.ALG_ID
-    def displayName(self): return "Filter Zoom"
-    def group(self): return "PO tools"
-    def groupId(self): return "po_tools"
+    def name(self):
+        return self.ALG_ID
 
+    def displayName(self):
+        return "Filter Zoom"
+
+    def group(self):
+        return "PO tools"
+
+    def groupId(self):
+        return "po_tools"
 
     def shortHelpString(self):
-        return ("Creates two views '<raster> ov' and '<raster> zo'. If OV/ZO fields exist, "
-                "applies filters 'OV'=1 and 'ZO'=1 respectively.")
+        return (
+            "Creates two views '<raster> ov' and '<raster> zo'. If OV/ZO fields exist, "
+            "applies filters 'OV'=1 and 'ZO'=1 respectively."
+        )
 
     def initAlgorithm(self, config=None):
         # Prefer the Layers panel selection (more reliable than activeLayer)
@@ -71,26 +94,42 @@ class POFilterZoomAlgorithm(QgsProcessingAlgorithm):
             v_default = v_default.id()
 
         # make raster optional; if a vector is selected it will override raster
-        self.addParameter(QgsProcessingParameterRasterLayer(
-            self.P_RASTER,
-            "Raster (optional; used for naming; defaults to selected)",
-            optional=True,
-            defaultValue=r_default
-        ))
-        self.addParameter(QgsProcessingParameterVectorLayer(
-            self.P_VECTOR,
-            "PO line vector (optional; derived from raster if empty)",
-            optional=True,
-            defaultValue=v_default
-        ))
+        self.addParameter(
+            QgsProcessingParameterRasterLayer(
+                self.P_RASTER,
+                "Raster (optional; used for naming; defaults to selected)",
+                optional=True,
+                defaultValue=r_default,
+            )
+        )
+        self.addParameter(
+            QgsProcessingParameterVectorLayer(
+                self.P_VECTOR,
+                "PO line vector (optional; derived from raster if empty)",
+                optional=True,
+                defaultValue=v_default,
+            )
+        )
         # customizable suffix used to recognise/strip 'poline' style suffixes from vector names
-        self.addParameter(QgsProcessingParameterString(
-            self.P_POLINE_SUFFIX,
-            "PO line name suffix to strip (default: 'poline')",
-            defaultValue="poline"
-        ))
-        self.addParameter(QgsProcessingParameterBoolean(self.P_FILTERS, "Apply filters ('OV' = 1 / 'ZO' = 1)", defaultValue=True))
-        self.addParameter(QgsProcessingParameterBoolean(self.P_REMOVE, "Remove original PO line after duplicate", defaultValue=False))
+        self.addParameter(
+            QgsProcessingParameterString(
+                self.P_POLINE_SUFFIX,
+                "PO line name suffix to strip (default: 'poline')",
+                defaultValue="poline",
+            )
+        )
+        self.addParameter(
+            QgsProcessingParameterBoolean(
+                self.P_FILTERS, "Apply filters ('OV' = 1 / 'ZO' = 1)", defaultValue=True
+            )
+        )
+        self.addParameter(
+            QgsProcessingParameterBoolean(
+                self.P_REMOVE,
+                "Remove original PO line after duplicate",
+                defaultValue=False,
+            )
+        )
 
     def processAlgorithm(self, parameters, context, feedback):
         # read provided parameter values (may be None)
@@ -129,13 +168,19 @@ class POFilterZoomAlgorithm(QgsProcessingAlgorithm):
         # if no PO line vector supplied/selected, derive it from raster (r must exist)
         if v is None:
             if not r or not isinstance(r, QgsRasterLayer):
-                raise QgsProcessingException("PO line vector is required or a raster must be available to derive it.")
+                raise QgsProcessingException(
+                    "PO line vector is required or a raster must be available to derive it."
+                )
             src = (r.source() or "").splitlines()[0]
             if not os.path.exists(src):
-                raise QgsProcessingException("Selected raster is not a local file: {}".format(src))
+                raise QgsProcessingException(
+                    "Selected raster is not a local file: {}".format(src)
+                )
             po = derive_poline_path_from_raster(src)
             if not os.path.exists(po):
-                raise QgsProcessingException("PO line shapefile not found: {}".format(po))
+                raise QgsProcessingException(
+                    "PO line shapefile not found: {}".format(po)
+                )
             v = load_vector_with_fallback(po, "{} poline".format(r.name().strip()))
             if not v:
                 raise QgsProcessingException("Failed to open PO line: {}".format(po))
@@ -161,7 +206,9 @@ class POFilterZoomAlgorithm(QgsProcessingAlgorithm):
                 break
             QCoreApplication.processEvents()
             if time.time() > deadline:
-                raise QgsProcessingException("Timeout waiting for layer edits to finish before duplicating.")
+                raise QgsProcessingException(
+                    "Timeout waiting for layer edits to finish before duplicating."
+                )
             time.sleep(0.05)
 
         # small extra pause to ensure provider flush
@@ -205,17 +252,25 @@ class POFilterZoomAlgorithm(QgsProcessingAlgorithm):
             if "OV" in flds:
                 ov.setSubsetString('"OV" = 1')
             else:
-                feedback.reportError('Field "OV" not found; OV filter not applied.', fatal=False)
+                feedback.reportError(
+                    'Field "OV" not found; OV filter not applied.', fatal=False
+                )
             if "ZO" in flds:
                 zo.setSubsetString('"ZO" = 1')
             else:
-                feedback.reportError('Field "ZO" not found; ZO filter not applied.', fatal=False)
+                feedback.reportError(
+                    'Field "ZO" not found; ZO filter not applied.', fatal=False
+                )
 
         if remove_orig:
             prj.removeMapLayer(v.id())
 
-        feedback.pushInfo("Created:\n - {} (filter: {})\n - {} (filter: {})".format(
-            ov.name(), repr(ov.subsetString()), zo.name(), repr(zo.subsetString())))
+        feedback.pushInfo(
+            "Created:\n - {} (filter: {})\n - {} (filter: {})".format(
+                ov.name(), repr(ov.subsetString()), zo.name(), repr(zo.subsetString())
+            )
+        )
         return {}
 
-    def createInstance(self): return POFilterZoomAlgorithm()
+    def createInstance(self):
+        return POFilterZoomAlgorithm()

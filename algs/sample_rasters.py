@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 """
 Sample raster Z values at vertices of input geometries (points, lines, polygons).
@@ -58,14 +57,14 @@ from qgis.core import (
     QgsApplication,
     QgsVectorLayer,
     QgsProject,
-    QgsMapLayer,
 )
+
 
 class SampleRastersAlgorithm(QgsProcessingAlgorithm):
     """
     Processing algorithm to sample Z values from raster(s) at vertices of input features
     and output a PointZ layer with attributes describing the sample.
-    
+
     Version 1.1.0: Uses actual "ID" attribute from input layer instead of internal feature ID.
     """
 
@@ -102,7 +101,7 @@ class SampleRastersAlgorithm(QgsProcessingAlgorithm):
             self.RASTERS,
             "Raster layer(s) to sample — order matters: last valid wins (leave empty to auto-select from same group)",
             layerType=QgsProcessing.TypeRaster,
-            optional=True
+            optional=True,
         )
         self.addParameter(raster_param)
 
@@ -294,6 +293,7 @@ class SampleRastersAlgorithm(QgsProcessingAlgorithm):
                     yield to_xy(pt)
 
         elif gtype == QgsWkbTypes.PolygonGeometry:
+
             def iter_ring(ring: List[QgsPoint]):
                 rng = ring if include_closure or len(ring) < 2 else ring[:-1]
                 for pt in rng:
@@ -331,7 +331,9 @@ class SampleRastersAlgorithm(QgsProcessingAlgorithm):
         Precompute coordinate transforms from source CRS to each raster's CRS.
         Returns list of tuples: (rasterLayer or None, transform_or_None)
         """
-        xforms: List[Tuple[Optional[QgsRasterLayer], Optional[QgsCoordinateTransform]]] = []
+        xforms: List[
+            Tuple[Optional[QgsRasterLayer], Optional[QgsCoordinateTransform]]
+        ] = []
         tctx = context.transformContext()
         for r in rasters:
             if not isinstance(r, QgsRasterLayer) or not r.isValid():
@@ -390,7 +392,9 @@ class SampleRastersAlgorithm(QgsProcessingAlgorithm):
     def _sample_z_last_valid_wins(
         self,
         pt_xy: QgsPointXY,
-        rasters_xforms: List[Tuple[Optional[QgsRasterLayer], Optional[QgsCoordinateTransform]]],
+        rasters_xforms: List[
+            Tuple[Optional[QgsRasterLayer], Optional[QgsCoordinateTransform]]
+        ],
         band: int,
     ) -> Tuple[Optional[float], Optional[str]]:
         """
@@ -430,7 +434,9 @@ class SampleRastersAlgorithm(QgsProcessingAlgorithm):
     def _sample_z_separate_fields(
         self,
         pt_xy: QgsPointXY,
-        rasters_xforms: List[Tuple[Optional[QgsRasterLayer], Optional[QgsCoordinateTransform]]],
+        rasters_xforms: List[
+            Tuple[Optional[QgsRasterLayer], Optional[QgsCoordinateTransform]]
+        ],
         band: int,
     ) -> List[Optional[float]]:
         """
@@ -438,7 +444,7 @@ class SampleRastersAlgorithm(QgsProcessingAlgorithm):
         Returns list of z_values (one per raster, None if invalid).
         """
         results = []
-        
+
         for r, xform in rasters_xforms:
             if r is None:
                 results.append(None)
@@ -466,14 +472,18 @@ class SampleRastersAlgorithm(QgsProcessingAlgorithm):
         return results
 
     # ---- Main processing ----
-    def processAlgorithm(self, parameters, context: QgsProcessingContext, feedback: QgsProcessingFeedback):
+    def processAlgorithm(
+        self, parameters, context: QgsProcessingContext, feedback: QgsProcessingFeedback
+    ):
         source = self.parameterAsSource(parameters, self.INPUT, context)
         if source is None:
             raise QgsProcessingException("Invalid input vector source.")
 
-        list_same_group = self.parameterAsBool(parameters, self.LIST_SAME_GROUP, context)
+        list_same_group = self.parameterAsBool(
+            parameters, self.LIST_SAME_GROUP, context
+        )
         raster_layers = self.parameterAsLayerList(parameters, self.RASTERS, context)
-        
+
         if list_same_group and not raster_layers:
             input_layer = self.parameterAsLayer(parameters, self.INPUT, context)
             if input_layer:
@@ -483,27 +493,48 @@ class SampleRastersAlgorithm(QgsProcessingAlgorithm):
                     input_group = input_node.parent()
                     if input_group and input_group != root:
                         for child in input_group.children():
-                            if hasattr(child, 'layer'):
+                            if hasattr(child, "layer"):
                                 layer = child.layer()
-                                if isinstance(layer, QgsRasterLayer) and layer.isValid():
+                                if (
+                                    isinstance(layer, QgsRasterLayer)
+                                    and layer.isValid()
+                                ):
                                     raster_layers.append(layer)
         if not raster_layers:
-            raise QgsProcessingException("Please provide at least one raster layer to sample.")
+            raise QgsProcessingException(
+                "Please provide at least one raster layer to sample."
+            )
 
         band = int(self.parameterAsInt(parameters, self.BAND, context))
-        exterior_only = self.parameterAsBool(parameters, self.POLY_EXTERIOR_ONLY, context)
-        include_closure = self.parameterAsBool(parameters, self.INCLUDE_CLOSURE, context)
-        densify_distance = float(self.parameterAsDouble(parameters, self.DENSIFY_DISTANCE, context))
-        separate_fields = self.parameterAsBool(parameters, self.SEPARATE_FIELDS, context)
-        include_src_name = self.parameterAsBool(parameters, self.INCLUDE_SRC_NAME, context)
-        include_src_fid = self.parameterAsBool(parameters, self.INCLUDE_SRC_FID, context)
+        exterior_only = self.parameterAsBool(
+            parameters, self.POLY_EXTERIOR_ONLY, context
+        )
+        include_closure = self.parameterAsBool(
+            parameters, self.INCLUDE_CLOSURE, context
+        )
+        densify_distance = float(
+            self.parameterAsDouble(parameters, self.DENSIFY_DISTANCE, context)
+        )
+        separate_fields = self.parameterAsBool(
+            parameters, self.SEPARATE_FIELDS, context
+        )
+        include_src_name = self.parameterAsBool(
+            parameters, self.INCLUDE_SRC_NAME, context
+        )
+        include_src_fid = self.parameterAsBool(
+            parameters, self.INCLUDE_SRC_FID, context
+        )
         include_v_idx = self.parameterAsBool(parameters, self.INCLUDE_V_IDX, context)
         skip_nulls = self.parameterAsBool(parameters, self.SKIP_NULL_SAMPLES, context)
         fallback_z = float(self.parameterAsDouble(parameters, self.FALLBACK_Z, context))
-        batch_size = max(1, int(self.parameterAsInt(parameters, self.BATCH_SIZE, context)))
+        batch_size = max(
+            1, int(self.parameterAsInt(parameters, self.BATCH_SIZE, context))
+        )
 
         # Precompute transforms from source CRS to rasters' CRS
-        rasters_xforms = self._build_transforms(source.sourceCrs(), raster_layers, context)
+        rasters_xforms = self._build_transforms(
+            source.sourceCrs(), raster_layers, context
+        )
 
         # Optionally densify features on-the-fly.
         def maybe_densify(g: QgsGeometry) -> QgsGeometry:
@@ -518,10 +549,9 @@ class SampleRastersAlgorithm(QgsProcessingAlgorithm):
             # For separate fields mode, generate temporary CSV in memory and load it
             try:
                 import tempfile
-                import io
-                
+
                 feedback.pushInfo("Generating temporary CSV file in memory...")
-                
+
                 # Prepare CSV headers using layer names
                 csv_headers = ["ID"]
                 valid_rasters = []
@@ -529,81 +559,97 @@ class SampleRastersAlgorithm(QgsProcessingAlgorithm):
                     if isinstance(r, QgsRasterLayer) and r.isValid():
                         csv_headers.append(r.name())
                         valid_rasters.append(r)
-                
+
                 if include_v_idx:
                     csv_headers.append("v_idx")
-                
+
                 feedback.pushInfo(f"CSV headers: {csv_headers}")
-                
+
                 # Create temporary file
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False, encoding='utf-8') as temp_file:
+                with tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".csv", delete=False, encoding="utf-8"
+                ) as temp_file:
                     csv_path = temp_file.name
                     feedback.pushInfo(f"Created temporary CSV file: {csv_path}")
-                    
+
                     writer = csv.writer(temp_file)
                     writer.writerow(csv_headers)
-                    
+
                     processed = 0
                     written = 0
-                    
+
                     for feat in source.getFeatures():
                         if feedback.isCanceled():
                             break
-                        
+
                         geom = feat.geometry()
                         if geom is None or geom.isEmpty():
                             continue
-                        
+
                         geom = maybe_densify(geom)
-                        src_fid_val = feat.attribute("ID") if feat.fieldNameIndex("ID") != -1 else feat.id()
+                        src_fid_val = (
+                            feat.attribute("ID")
+                            if feat.fieldNameIndex("ID") != -1
+                            else feat.id()
+                        )
                         v_idx = 0
-                        
-                        for pt_xy in self._iter_vertices(geom, exterior_only, include_closure):
+
+                        for pt_xy in self._iter_vertices(
+                            geom, exterior_only, include_closure
+                        ):
                             if feedback.isCanceled():
                                 break
-                            
+
                             # Sample each raster separately
-                            z_values = self._sample_z_separate_fields(pt_xy, rasters_xforms, band=band)
-                            
+                            z_values = self._sample_z_separate_fields(
+                                pt_xy, rasters_xforms, band=band
+                            )
+
                             # Check if all values are None and skip if requested
                             if skip_nulls and all(z is None for z in z_values):
                                 processed += 1
                                 continue
-                            
+
                             # Build CSV row
                             row = [src_fid_val] + z_values
-                            
+
                             if include_v_idx:
                                 row.append(v_idx)
-                            
+
                             writer.writerow(row)
                             written += 1
                             v_idx += 1
                             processed += 1
-                
+
                 feedback.pushInfo(f"Temporary CSV written with {written} records")
-                
+
                 # Load CSV into QGIS
                 csv_uri = f"file:///{csv_path.replace(os.sep, '/')}?delimiter=,"
                 csv_layer = QgsVectorLayer(csv_uri, "Sampled_Values", "delimitedtext")
                 if csv_layer.isValid():
                     QgsProject.instance().addMapLayer(csv_layer)
-                    feedback.pushInfo(f"Temporary CSV loaded into QGIS as 'Sampled_Values' layer")
+                    feedback.pushInfo(
+                        "Temporary CSV loaded into QGIS as 'Sampled_Values' layer"
+                    )
                 else:
-                    feedback.pushWarning(f"Could not load temporary CSV into QGIS. URI: {csv_uri}")
-                
-                feedback.pushInfo(f"Done. Processed {processed} vertex samples; loaded {written} records from temporary CSV.")
+                    feedback.pushWarning(
+                        f"Could not load temporary CSV into QGIS. URI: {csv_uri}"
+                    )
+
+                feedback.pushInfo(
+                    f"Done. Processed {processed} vertex samples; loaded {written} records from temporary CSV."
+                )
                 return {self.OUTPUT: csv_path}
-                
+
             except Exception as e:
                 raise QgsProcessingException(f"Error saving to CSV: {e}")
-        
+
         # For non-separate fields mode, continue with original point layer creation
         fields = QgsFields()
         fields.append(QgsField("Z", QVariant.Double))
         if include_src_name:
             fields.append(QgsField("z_src", QVariant.String))
-        
+
         if include_src_fid:
             fields.append(QgsField("src_fid", QVariant.LongLong))
         if include_v_idx:
@@ -622,7 +668,9 @@ class SampleRastersAlgorithm(QgsProcessingAlgorithm):
             raise QgsProcessingException("Could not create output sink.")
 
         # Precompute transforms from source CRS to rasters' CRS
-        rasters_xforms = self._build_transforms(source.sourceCrs(), raster_layers, context)
+        rasters_xforms = self._build_transforms(
+            source.sourceCrs(), raster_layers, context
+        )
 
         # Optionally densify features on-the-fly.
         def maybe_densify(g: QgsGeometry) -> QgsGeometry:
@@ -646,7 +694,9 @@ class SampleRastersAlgorithm(QgsProcessingAlgorithm):
                 total_vertices += 1
 
         if total_vertices == 0:
-            feedback.pushInfo("No vertices found in the input according to the current settings.")
+            feedback.pushInfo(
+                "No vertices found in the input according to the current settings."
+            )
             return {self.OUTPUT: dest_id}
 
         # ---- Second pass: sample and create point features (non-separate fields mode only) ----
@@ -663,7 +713,9 @@ class SampleRastersAlgorithm(QgsProcessingAlgorithm):
                 continue
 
             geom = maybe_densify(geom)
-            src_fid_val = feat.attribute("ID") if feat.fieldNameIndex("ID") != -1 else feat.id()
+            src_fid_val = (
+                feat.attribute("ID") if feat.fieldNameIndex("ID") != -1 else feat.id()
+            )
             v_idx = 0
 
             for pt_xy in self._iter_vertices(geom, exterior_only, include_closure):
@@ -671,15 +723,21 @@ class SampleRastersAlgorithm(QgsProcessingAlgorithm):
                     break
 
                 # Merge pattern ("last valid wins")
-                z_val, z_src = self._sample_z_last_valid_wins(pt_xy, rasters_xforms, band=band)
-                
+                z_val, z_src = self._sample_z_last_valid_wins(
+                    pt_xy, rasters_xforms, band=band
+                )
+
                 if z_val is None and skip_nulls:
                     processed += 1
                     feedback.setProgress(int(100.0 * processed / total_vertices))
                     continue
-                
-                z_for_geom = float(z_val) if (z_val is not None and not math.isnan(float(z_val))) else float(fallback_z)
-                
+
+                z_for_geom = (
+                    float(z_val)
+                    if (z_val is not None and not math.isnan(float(z_val)))
+                    else float(fallback_z)
+                )
+
                 attrs = [float(z_val) if z_val is not None else None]
                 if include_src_name:
                     attrs.append(z_src if z_src is not None else None)
@@ -718,7 +776,9 @@ class SampleRastersAlgorithm(QgsProcessingAlgorithm):
             written += len(batch)
             batch.clear()
 
-        feedback.pushInfo(f"Done. Processed {processed} vertex samples; wrote {written} features to PointZ layer.")
+        feedback.pushInfo(
+            f"Done. Processed {processed} vertex samples; wrote {written} features to PointZ layer."
+        )
         if processed < total_vertices:
             feedback.pushWarning(
                 f"Processing was canceled early. Output contains {written} of {total_vertices} vertices."

@@ -18,7 +18,8 @@ import numpy as np
 # Matplotlib (headless)
 try:
     import matplotlib
-    matplotlib.use('Agg')
+
+    matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 except ImportError:
     plt = None
@@ -31,15 +32,29 @@ except ImportError:
 
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import (
-    QDialog, QVBoxLayout, QTableWidget, QTableWidgetItem, QHeaderView,
-    QCheckBox, QLabel, QHBoxLayout, QPushButton, QSizePolicy, QMessageBox, QComboBox,
-    QDoubleSpinBox, QLineEdit, QFileDialog, QGridLayout
+    QDialog,
+    QVBoxLayout,
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
+    QCheckBox,
+    QLabel,
+    QHBoxLayout,
+    QPushButton,
+    QSizePolicy,
+    QMessageBox,
+    QComboBox,
+    QDoubleSpinBox,
+    QLineEdit,
+    QFileDialog,
 )
 
 from qgis.core import (
-    QgsProcessingAlgorithm, QgsProject,
-    QgsRasterLayer, QgsVectorLayer, QgsWkbTypes,
-    QgsProcessing
+    QgsProcessingAlgorithm,
+    QgsProject,
+    QgsRasterLayer,
+    QgsVectorLayer,
+    QgsWkbTypes,
 )
 
 from qgis.utils import iface
@@ -48,6 +63,7 @@ from qgis.utils import iface
 # ======================================================================
 # Helper functions
 # ======================================================================
+
 
 def extract_scenario_from_layer_name(layer_name: str):
     """
@@ -60,7 +76,7 @@ def extract_scenario_from_layer_name(layer_name: str):
 
     Returns the part before the _d/_h/_v.
     """
-    match = re.search(r'^(.+?)_([dhv])(?:_.*)?$', layer_name)
+    match = re.search(r"^(.+?)_([dhv])(?:_.*)?$", layer_name)
     return match.group(1) if match else None
 
 
@@ -68,7 +84,7 @@ def simplify_scenario_name(scenario_name: str) -> str:
     """Remove trailing _<digits> and replace underscores with spaces."""
     if not scenario_name:
         return ""
-    return re.sub(r'_\d+$', '', scenario_name).replace('_', ' ')
+    return re.sub(r"_\d+$", "", scenario_name).replace("_", " ")
 
 
 def convert_to_level_raster(raster_path: str, grid_type: str):
@@ -77,14 +93,16 @@ def convert_to_level_raster(raster_path: str, grid_type: str):
     'h' (level) raster by replacing '_d_' or '_v_' with '_h_' in the filename.
     If grid_type is 'h', just return the original path.
     """
-    if grid_type == 'h':
+    if grid_type == "h":
         return raster_path
 
     level_path = raster_path.replace(f"_{grid_type}_", "_h_")
     return level_path if os.path.exists(level_path) else None
 
 
-def sample_raster_along_line(raster_layer: QgsRasterLayer, line_geom, sample_interval: float):
+def sample_raster_along_line(
+    raster_layer: QgsRasterLayer, line_geom, sample_interval: float
+):
     """
     Sample raster values at fixed interval along a line geometry.
     Returns (distances, values).
@@ -111,7 +129,9 @@ def sample_raster_along_line(raster_layer: QgsRasterLayer, line_geom, sample_int
     return distances, values
 
 
-def generate_section_plot(line_id_str, terrain_data_list, level_data_dict, output_pdf_base):
+def generate_section_plot(
+    line_id_str, terrain_data_list, level_data_dict, output_pdf_base
+):
     """
     Generate a profile plot for one line and save it as a PDF.
 
@@ -135,10 +155,10 @@ def generate_section_plot(line_id_str, terrain_data_list, level_data_dict, outpu
 
             if idx == 0:
                 # Main terrain profile
-                ax.plot(dists, vals, 'k-', linewidth=2.5, label=name, zorder=10)
-                ax.fill_between(dists, vals, alpha=0.2, color='brown', zorder=5)
+                ax.plot(dists, vals, "k-", linewidth=2.5, label=name, zorder=10)
+                ax.fill_between(dists, vals, alpha=0.2, color="brown", zorder=5)
             else:
-                ax.plot(dists, vals, 'k--', linewidth=1.5, label=name, alpha=0.6)
+                ax.plot(dists, vals, "k--", linewidth=1.5, label=name, alpha=0.6)
 
         # Plot level profiles
         colors = plt.cm.tab10(np.linspace(0, 1, max(1, len(level_data_dict))))
@@ -154,31 +174,32 @@ def generate_section_plot(line_id_str, terrain_data_list, level_data_dict, outpu
                 color=colors[idx % 10],
                 linewidth=2.0,
                 label=simplify_scenario_name(name),
-                alpha=0.8
+                alpha=0.8,
             )
 
         if all_dists:
             ax.set_xlim(min(all_dists), max(all_dists))
 
-        ax.set_xlabel('Distance (m)')
-        ax.set_ylabel('Elevation (m)')
-        ax.set_title(f'Section Profile: {line_id_str}')
+        ax.set_xlabel("Distance (m)")
+        ax.set_ylabel("Elevation (m)")
+        ax.set_title(f"Section Profile: {line_id_str}")
         ax.grid(True, alpha=0.3)
-        ax.legend(fontsize=9, loc='best')
+        ax.legend(fontsize=9, loc="best")
 
-        clean_id = re.sub(r'[^a-zA-Z0-9_\-]', '', str(line_id_str))
+        clean_id = re.sub(r"[^a-zA-Z0-9_\-]", "", str(line_id_str))
         pdf_path = f"{output_pdf_base}_{clean_id}.pdf"
-        plt.savefig(pdf_path, dpi=120, bbox_inches='tight')
+        plt.savefig(pdf_path, dpi=120, bbox_inches="tight")
         plt.close(fig)
 
         return pdf_path
-    except Exception as e:
+    except Exception:
         return None
 
 
 # ======================================================================
 # Input Dialog (similar to load_sample_points)
 # ======================================================================
+
 
 class LoadProfileSectionsInputDialog(QDialog):
     """
@@ -224,17 +245,23 @@ class LoadProfileSectionsInputDialog(QDialog):
         self.terrain_table.setHorizontalHeaderLabels(["Select", "Layer Name"])
         self.terrain_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
         self.terrain_table.setColumnWidth(0, 60)
-        self.terrain_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.terrain_table.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.Stretch
+        )
         self.terrain_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout.addWidget(self.terrain_table)
         layout.setStretchFactor(self.terrain_table, 1)
-        
+
         # Terrain table controls
         terrain_btn_layout = QHBoxLayout()
         terrain_all_btn = QPushButton("Select All")
         terrain_none_btn = QPushButton("Clear All")
-        terrain_all_btn.clicked.connect(lambda: self._set_table_all(self.terrain_table, True))
-        terrain_none_btn.clicked.connect(lambda: self._set_table_all(self.terrain_table, False))
+        terrain_all_btn.clicked.connect(
+            lambda: self._set_table_all(self.terrain_table, True)
+        )
+        terrain_none_btn.clicked.connect(
+            lambda: self._set_table_all(self.terrain_table, False)
+        )
         terrain_btn_layout.addWidget(terrain_all_btn)
         terrain_btn_layout.addWidget(terrain_none_btn)
         terrain_btn_layout.addStretch()
@@ -251,13 +278,15 @@ class LoadProfileSectionsInputDialog(QDialog):
         self.grid_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout.addWidget(self.grid_table)
         layout.setStretchFactor(self.grid_table, 1)
-        
+
         # Grid table controls
         grid_btn_layout = QHBoxLayout()
         grid_all_btn = QPushButton("Select All")
         grid_none_btn = QPushButton("Clear All")
         grid_all_btn.clicked.connect(lambda: self._set_table_all(self.grid_table, True))
-        grid_none_btn.clicked.connect(lambda: self._set_table_all(self.grid_table, False))
+        grid_none_btn.clicked.connect(
+            lambda: self._set_table_all(self.grid_table, False)
+        )
         grid_btn_layout.addWidget(grid_all_btn)
         grid_btn_layout.addWidget(grid_none_btn)
         grid_btn_layout.addStretch()
@@ -283,7 +312,7 @@ class LoadProfileSectionsInputDialog(QDialog):
         self.pdf_path_edit = QLineEdit()
         self.pdf_path_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         pdf_layout.addWidget(self.pdf_path_edit)
-        
+
         browse_btn = QPushButton("Browse...")
         browse_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         browse_btn.clicked.connect(self.browse_output_file)
@@ -315,7 +344,10 @@ class LoadProfileSectionsInputDialog(QDialog):
         selected_index = 0
 
         for index, layer in enumerate(project.mapLayers().values()):
-            if isinstance(layer, QgsVectorLayer) and layer.geometryType() == QgsWkbTypes.LineGeometry:
+            if (
+                isinstance(layer, QgsVectorLayer)
+                and layer.geometryType() == QgsWkbTypes.LineGeometry
+            ):
                 self.lines_combo.addItem(layer.name(), layer)
                 if current_layer and layer.id() == current_layer.id():
                     selected_index = self.lines_combo.count() - 1
@@ -332,7 +364,11 @@ class LoadProfileSectionsInputDialog(QDialog):
     def _populate_raster_table(self, table, select_all=True):
         """Populate a raster layer table."""
         project = QgsProject.instance()
-        rasters = [layer for layer in project.mapLayers().values() if isinstance(layer, QgsRasterLayer)]
+        rasters = [
+            layer
+            for layer in project.mapLayers().values()
+            if isinstance(layer, QgsRasterLayer)
+        ]
 
         table.setRowCount(len(rasters))
         for row, layer in enumerate(rasters):
@@ -351,7 +387,9 @@ class LoadProfileSectionsInputDialog(QDialog):
 
         for layer in project.mapLayers().values():
             if isinstance(layer, QgsRasterLayer):
-                if re.search(r'_[dhv]_', layer.name()) or re.search(r'_[dhv]\.', layer.name()):
+                if re.search(r"_[dhv]_", layer.name()) or re.search(
+                    r"_[dhv]\.", layer.name()
+                ):
                     grid_layers.append(layer)
 
         self.grid_table.setRowCount(len(grid_layers))
@@ -389,7 +427,7 @@ class LoadProfileSectionsInputDialog(QDialog):
             self,
             "Save Profile Sections PDF",
             self.pdf_path_edit.text() or os.path.expanduser("~"),
-            "PDF Files (*.pdf)"
+            "PDF Files (*.pdf)",
         )
         if file_path:
             self.pdf_path_edit.setText(file_path)
@@ -404,22 +442,28 @@ class LoadProfileSectionsInputDialog(QDialog):
 
         # Validate
         if not self.input_lines_layer:
-            QMessageBox.warning(self, "Error", "Please select an input profile lines layer")
+            QMessageBox.warning(
+                self, "Error", "Please select an input profile lines layer"
+            )
             return
 
         if not self.terrain_layers:
-            QMessageBox.warning(self, "Error", "Please select at least one terrain (DEM) layer")
+            QMessageBox.warning(
+                self, "Error", "Please select at least one terrain (DEM) layer"
+            )
             return
 
         if not self.grid_layers:
-            QMessageBox.warning(self, "Error", "Please select at least one grid layer (d/h/v raster)")
+            QMessageBox.warning(
+                self, "Error", "Please select at least one grid layer (d/h/v raster)"
+            )
             return
 
         if not self.output_pdf_path:
             QMessageBox.warning(self, "Error", "Please specify an output PDF file path")
             return
 
-        if not self.output_pdf_path.lower().endswith('.pdf'):
+        if not self.output_pdf_path.lower().endswith(".pdf"):
             QMessageBox.warning(self, "Error", "Output file must have .pdf extension")
             return
 
@@ -430,6 +474,7 @@ class LoadProfileSectionsInputDialog(QDialog):
 # Main Processing Algorithm
 # ======================================================================
 
+
 class LoadProfileSectionsAlgorithm(QgsProcessingAlgorithm):
     """
     Algorithm to generate profile section PDFs from line features.
@@ -439,16 +484,16 @@ class LoadProfileSectionsAlgorithm(QgsProcessingAlgorithm):
         return LoadProfileSectionsAlgorithm()
 
     def name(self):
-        return 'load_profile_sections'
+        return "load_profile_sections"
 
     def displayName(self):
-        return '4 - Load Profile Sections'
+        return "4 - Load Profile Sections"
 
     def group(self):
-        return '2 - Result Analysis'
+        return "2 - Result Analysis"
 
     def groupId(self):
-        return 'result_analysis'
+        return "result_analysis"
 
     def shortHelpString(self):
         return (
@@ -493,7 +538,7 @@ class LoadProfileSectionsAlgorithm(QgsProcessingAlgorithm):
         output_dir = os.path.dirname(output_path)
         if output_dir:
             os.makedirs(output_dir, exist_ok=True)
-        
+
         temp_base = os.path.splitext(output_path)[0] + "_temp"
 
         # Process features
@@ -533,21 +578,25 @@ class LoadProfileSectionsAlgorithm(QgsProcessingAlgorithm):
                 g_name = lyr.name()
 
                 # Grid type detection – _d_/_h_/_v_
-                type_m = re.search(r'_([dhv])_', g_name)
-                g_type = type_m.group(1) if type_m else 'h'
+                type_m = re.search(r"_([dhv])_", g_name)
+                g_type = type_m.group(1) if type_m else "h"
 
                 h_path = convert_to_level_raster(lyr.source(), g_type)
                 if h_path:
                     level_rl = QgsRasterLayer(h_path, "tmp")
-                    dists, vals = sample_raster_along_line(level_rl, geom, sample_interval)
+                    dists, vals = sample_raster_along_line(
+                        level_rl, geom, sample_interval
+                    )
                     if dists:
-                        scenario_name = extract_scenario_from_layer_name(g_name) or g_name
+                        scenario_name = (
+                            extract_scenario_from_layer_name(g_name) or g_name
+                        )
                         l_data[scenario_name] = (dists, vals)
 
             # Determine line ID
             line_id = feat.id()
             for fld in feat.fields():
-                if 'ID' in fld.name().upper():
+                if "ID" in fld.name().upper():
                     try:
                         line_id = feat[fld.name()]
                         break
@@ -580,7 +629,7 @@ class LoadProfileSectionsAlgorithm(QgsProcessingAlgorithm):
             feedback.pushInfo(f"✓ Profile PDF saved: {output_path}")
 
             # Auto-open on Windows
-            if os.name == 'nt':
+            if os.name == "nt":
                 try:
                     os.startfile(output_path)
                 except Exception:
