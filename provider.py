@@ -20,11 +20,13 @@ from .algs.load_po_lines import LoadPOLinesAlgorithm
 from .algs.load_sample_points import LoadSamplePointsAlgorithm
 from .algs.load_profile_sections import LoadProfileSectionsAlgorithm
 from .algs.cross_section_alignment import CrossSectionAlignmentAlgorithm
+from .algs.time_of_concentration import TimeOfConcentrationAlgorithm
 from .algs.gis_location import GISLocationAlgorithm
 from .algs.process_landcover import ProcessLandcoverAlgorithm
 from .algs.wse_comparison import WSEComparisonAlgorithm
 from .algs.lc_add_fields import LandCoverAddFieldsAlgorithm
 from .algs.inundation_boundary import InundationBoundaryAlgorithm
+from .algs.rasters_comparison import RastersComparisonAlgorithm
 
 
 class TuflowProcessingProvider(QgsProcessingProvider):
@@ -67,6 +69,9 @@ class TuflowProcessingProvider(QgsProcessingProvider):
         self.addAlgorithm(
             CrossSectionAlignmentAlgorithm()
         )  # interactive cross section tool
+        self.addAlgorithm(
+            TimeOfConcentrationAlgorithm()
+        )  # time of concentration calculator tool
         self.addAlgorithm(TimeSeriesQPlotAlgorithm())  # time series Q plot algorithm
         self.addAlgorithm(
             FloodHazardClassifyAlgorithm()
@@ -81,3 +86,4 @@ class TuflowProcessingProvider(QgsProcessingProvider):
         self.addAlgorithm(
             InundationBoundaryAlgorithm()
         )  # Trace flooded footprints from depths
+        self.addAlgorithm(RastersComparisonAlgorithm())  # compare generic rasters

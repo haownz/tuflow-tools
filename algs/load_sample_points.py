@@ -105,6 +105,18 @@ def find_corresponding_rasters(grid_layer_name, raster_dir, base_name, grid_type
         pattern = os.path.join(raster_dir, search_name.replace(".tif", "") + "*.tif")
         matches = glob.glob(pattern, recursive=False)
 
+        # Special fallback for Velocity: try without _HR suffix if not found
+        if not matches and letter == "v":
+            # Strip _HR_ or _HR before the extension
+            alt_search_name = re.sub(r"_HR_", "_", search_name, flags=re.IGNORECASE)
+            alt_search_name = re.sub(r"_HR\.", ".", alt_search_name, flags=re.IGNORECASE)
+
+            if alt_search_name != search_name:
+                alt_pattern = os.path.join(
+                    raster_dir, alt_search_name.replace(".tif", "") + "*.tif"
+                )
+                matches = glob.glob(alt_pattern, recursive=False)
+
         if matches:
             # Use first match, normalized path
             raster_map[key] = os.path.normpath(matches[0])
@@ -113,7 +125,11 @@ def find_corresponding_rasters(grid_layer_name, raster_dir, base_name, grid_type
 
 
 def sample_rasters_at_points(
-    input_points_layer, raster_map, terrain_layers, feedback=None
+    input_points_layer,
+    raster_map,
+    terrain_layers,
+    id_field_name="fid",
+    feedback=None,
 ):
     """
     Sample d/h/v and terrain raster values at provided input point locations.
@@ -122,6 +138,7 @@ def sample_rasters_at_points(
         input_points_layer: QgsVectorLayer with point geometries (user-provided sample locations)
         raster_map: Dict of {'Level': path, 'Depth': path, 'Velocity': path}
         terrain_layers: List of QgsRasterLayer objects for terrain elevation sampling
+        id_field_name: Name of the field to use as ID (default: 'fid')
         feedback: Processing feedback object (optional)
 
     Returns:
@@ -138,9 +155,14 @@ def sample_rasters_at_points(
                 feedback.reportError("Terrain layer(s) are invalid or empty")
             return None
 
+        # Determine ID field type from input layer
+        id_field_type = QVariant.Int
+        if id_field_name and input_points_layer.fields().indexFromName(id_field_name) != -1:
+            id_field_type = input_points_layer.fields().field(id_field_name).type()
+
         # Create output layer with proper CRS
         fields = QgsFields()
-        fields.append(QgsField("ID", QVariant.Int))
+        fields.append(QgsField("ID", id_field_type))
         fields.append(QgsField("X", QVariant.Double))
         fields.append(QgsField("Y", QVariant.Double))
         fields.append(QgsField("Terrain", QVariant.Double))
@@ -206,7 +228,8 @@ def sample_rasters_at_points(
                 out_feat.setGeometry(QgsGeometry.fromPointXY(pt))
 
                 # Sample values [ID, X, Y, Terrain, Depth, Level, Velocity]
-                attrs = [point_id, pt.x(), pt.y()]
+                id_val = feat[id_field_name] if id_field_name in feat.attributeMap() or id_field_name in feat.fields().names() else point_id
+                attrs = [id_val, pt.x(), pt.y()]
 
                 # Sample terrain first
                 terrain_sampled_val = None
@@ -445,11 +468,14 @@ class LoadSamplePointsInputDialog(QDialog):
         self.setMinimumHeight(600)
 
         self.input_points_layer = None
+        self.id_field_name = None
         self.terrain_layers = []
         self.grid_layers = []
 
         self.init_ui()
         self.load_available_layers()
+        self.points_combo.currentIndexChanged.connect(self.load_available_fields)
+        self.load_available_fields()
 
     def init_ui(self):
         layout = QVBoxLayout()
@@ -459,6 +485,11 @@ class LoadSamplePointsInputDialog(QDialog):
         self.points_combo = QComboBox()
         self.points_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(self.points_combo)
+
+        layout.addWidget(QLabel("Step 1b: Select field to use as ID (Index)"))
+        self.id_field_combo = QComboBox()
+        self.id_field_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        layout.addWidget(self.id_field_combo)
 
         # Step 2: Terrain layer selection
         layout.addWidget(
@@ -575,12 +606,31 @@ class LoadSamplePointsInputDialog(QDialog):
                 row, 2, QTableWidgetItem(type_map.get(grid_type, "Unknown"))
             )
 
+    def load_available_fields(self):
+        """Load available fields for the selected points layer."""
+        self.id_field_combo.clear()
+        layer = self.points_combo.currentData()
+        if not layer or not isinstance(layer, QgsVectorLayer):
+            return
+
+        fields = layer.fields()
+        field_names = [f.name() for f in fields]
+        self.id_field_combo.addItems(field_names)
+
+        # Default to "fid" if present
+        fid_idx = self.id_field_combo.findText("fid", Qt.MatchFixedString)
+        if fid_idx != -1:
+            self.id_field_combo.setCurrentIndex(fid_idx)
+        elif self.id_field_combo.count() > 0:
+            self.id_field_combo.setCurrentIndex(0)
+
     def get_selected_layers(self):
         """
         Retrieve selected layers and validate.
         Returns True if all selections valid, False otherwise.
         """
         self.input_points_layer = self.points_combo.currentData()
+        self.id_field_name = self.id_field_combo.currentText()
 
         self.terrain_layers = []
         for i in range(self.terrain_list.count()):
@@ -680,10 +730,12 @@ class LoadSamplePointsAlgorithm(QgsProcessingAlgorithm):
             return {}
 
         input_points_layer = dialog.input_points_layer
+        id_field_name = dialog.id_field_name
         terrain_layers = dialog.terrain_layers
         grid_layers = dialog.grid_layers
 
         feedback.pushInfo(f"  ✓ Input points: {input_points_layer.name()}")
+        feedback.pushInfo(f"  ✓ ID Field: {id_field_name}")
         layer_names = [layer.name() for layer in terrain_layers]
         feedback.pushInfo(f"  ✓ Terrain layers: {', '.join(layer_names)}")
         feedback.pushInfo(f"  ✓ Grid layers to process: {len(grid_layers)}")
@@ -832,7 +884,11 @@ class LoadSamplePointsAlgorithm(QgsProcessingAlgorithm):
                     f"  → Sampling raster values at {input_points_layer.featureCount()} points..."
                 )
                 sample_layer = sample_rasters_at_points(
-                    input_points_layer, raster_map, terrain_layers, feedback=feedback
+                    input_points_layer,
+                    raster_map,
+                    terrain_layers,
+                    id_field_name=id_field_name,
+                    feedback=feedback,
                 )
 
                 if not sample_layer:

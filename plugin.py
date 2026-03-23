@@ -29,6 +29,7 @@ class TuflowToolsPlugin(QObject):
         self.style_action = None
         self.rename_action = None
         self.restore_layer_name_action = None
+        self.toggle_labels_action = None
 
     def initGui(self):
         self.provider = TuflowProcessingProvider()
@@ -71,6 +72,22 @@ class TuflowToolsPlugin(QObject):
         self.restore_layer_name_action.setToolTip("Restore layer name from source")
         self.restore_layer_name_action.triggered.connect(self.run_restore_layer_name)
         self.toolbar.addAction(self.restore_layer_name_action)
+
+        # Add Toggle Labels button
+        icon_toggle_path = os.path.join(
+            os.path.dirname(__file__), "icon_toggle_labels.png"
+        )
+        icon_toggle = (
+            QIcon(icon_toggle_path) if os.path.exists(icon_toggle_path) else QIcon()
+        )
+        self.toggle_labels_action = QAction(
+            icon_toggle,
+            "Toggle Labels",
+            self.iface.mainWindow(),
+        )
+        self.toggle_labels_action.setToolTip("Toggle labels for selected layer")
+        self.toggle_labels_action.triggered.connect(self.toggle_selected_layer_labels)
+        self.toolbar.addAction(self.toggle_labels_action)
 
         # Auto-update active layer name variable
         self.iface.currentLayerChanged.connect(self._update_active_layer_name)
@@ -138,6 +155,28 @@ class TuflowToolsPlugin(QObject):
             self.iface.messageBar().pushMessage(
                 "Restore Layer Name", "No layer names were changed.", Qgis.Info, 4
             )
+
+    def toggle_selected_layer_labels(self):
+        """Toggle labels for the currently active vector layer."""
+        layer = self.iface.activeLayer()
+        if not layer:
+            self.iface.messageBar().pushMessage(
+                "Toggle Labels", "No layer selected", Qgis.Warning, 4
+            )
+            return
+
+        if layer.type() != Qgis.LayerType.VectorLayer:
+            self.iface.messageBar().pushMessage(
+                "Toggle Labels",
+                "Selected layer is not a vector layer",
+                Qgis.Warning,
+                4,
+            )
+            return
+
+        enabled = not layer.labelsEnabled()
+        layer.setLabelsEnabled(enabled)
+        layer.triggerRepaint()
 
     def unload(self):
         try:
