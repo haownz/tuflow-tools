@@ -109,7 +109,9 @@ def find_corresponding_rasters(grid_layer_name, raster_dir, base_name, grid_type
         if not matches and letter == "v":
             # Strip _HR_ or _HR before the extension
             alt_search_name = re.sub(r"_HR_", "_", search_name, flags=re.IGNORECASE)
-            alt_search_name = re.sub(r"_HR\.", ".", alt_search_name, flags=re.IGNORECASE)
+            alt_search_name = re.sub(
+                r"_HR\.", ".", alt_search_name, flags=re.IGNORECASE
+            )
 
             if alt_search_name != search_name:
                 alt_pattern = os.path.join(
@@ -157,7 +159,10 @@ def sample_rasters_at_points(
 
         # Determine ID field type from input layer
         id_field_type = QVariant.Int
-        if id_field_name and input_points_layer.fields().indexFromName(id_field_name) != -1:
+        if (
+            id_field_name
+            and input_points_layer.fields().indexFromName(id_field_name) != -1
+        ):
             id_field_type = input_points_layer.fields().field(id_field_name).type()
 
         # Create output layer with proper CRS
@@ -228,7 +233,12 @@ def sample_rasters_at_points(
                 out_feat.setGeometry(QgsGeometry.fromPointXY(pt))
 
                 # Sample values [ID, X, Y, Terrain, Depth, Level, Velocity]
-                id_val = feat[id_field_name] if id_field_name in feat.attributeMap() or id_field_name in feat.fields().names() else point_id
+                id_val = (
+                    feat[id_field_name]
+                    if id_field_name in feat.attributeMap()
+                    or id_field_name in feat.fields().names()
+                    else point_id
+                )
                 attrs = [id_val, pt.x(), pt.y()]
 
                 # Sample terrain first

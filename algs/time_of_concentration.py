@@ -14,8 +14,8 @@ Features:
 """
 
 import math
-import os
 import numpy as np
+
 try:
     from scipy.integrate import trapezoid
 except ImportError:
@@ -45,13 +45,10 @@ from qgis.core import (
     QgsRasterLayer,
     QgsGeometry,
     QgsPointXY,
-    QgsPoint,
     QgsWkbTypes,
-    QgsFeature,
     QgsVectorLayer,
     QgsCoordinateTransform,
     QgsProcessingAlgorithm,
-    QgsField,
 )
 from qgis.gui import QgsMapTool, QgsRubberBand, QgsVertexMarker
 from qgis.utils import iface
@@ -63,14 +60,12 @@ try:
         NavigationToolbar2QT as NavigationToolbar,
     )
     from matplotlib.figure import Figure
-    import matplotlib.pyplot as plt
 except ImportError:
     from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
     from matplotlib.backends.backend_qt5agg import (
         NavigationToolbar2QT as NavigationToolbar,
     )
     from matplotlib.figure import Figure
-    import matplotlib.pyplot as plt
 
 # Keep reference to prevent GC
 _LIVE_WINDOWS = []
@@ -299,7 +294,7 @@ class TimeOfConcentrationDialog(QDialog):
         raster_group_layout = QVBoxLayout()
         raster_group_layout.setContentsMargins(0, 0, 0, 0)
         left_widget.setLayout(raster_group_layout)
-        
+
         raster_group_layout.addWidget(QLabel("DEM Layers:"))
 
         # Table for DEM layers
@@ -501,7 +496,9 @@ class TimeOfConcentrationDialog(QDialog):
         if not self.alignment_geom:
             return
 
-        if not self.long_section_vals or all(np.isnan(v) for v in self.long_section_vals):
+        if not self.long_section_vals or all(
+            np.isnan(v) for v in self.long_section_vals
+        ):
             return
 
         try:
@@ -516,14 +513,14 @@ class TimeOfConcentrationDialog(QDialog):
             # Calculate tc using equation 4.3:
             # tc = 0.14 * C * L^0.66 * (CN/(200-CN))^-0.55 * Sc^-0.30
             L = self.alignment_length  # in km
-            
+
             if CN >= 200:
                 return
 
             if Sc <= 0:
                 return
 
-            tc = 0.14 * C * (L ** 0.66) * ((CN / (200 - CN)) ** -0.55) * (Sc ** -0.30)
+            tc = 0.14 * C * (L**0.66) * ((CN / (200 - CN)) ** -0.55) * (Sc**-0.30)
 
             # Apply minimum tc = 10 minutes (0.167 hrs)
             MIN_TC = 10.0 / 60.0  # 10 minutes in hours = 0.167 hrs
@@ -539,8 +536,10 @@ class TimeOfConcentrationDialog(QDialog):
             # Update labels
             self.label_L.setText(f"Catchment Length L: {L:.3f} km")
             self.label_Sc.setText(f"Slope Sc: {Sc:.6f} m/m")
-            self.label_tc.setText(f"Time of Concentration tc: {tc:.3f} hrs ({tc*60:.1f} min)")
-            self.label_tp.setText(f"Time to Peak tp: {tp:.3f} hrs ({tp*60:.1f} min)")
+            self.label_tc.setText(
+                f"Time of Concentration tc: {tc:.3f} hrs ({tc * 60:.1f} min)"
+            )
+            self.label_tp.setText(f"Time to Peak tp: {tp:.3f} hrs ({tp * 60:.1f} min)")
 
         except Exception:
             pass
@@ -713,7 +712,7 @@ class TimeOfConcentrationDialog(QDialog):
 
             pt = pt_geom.asPoint()
             pt_xy = QgsPointXY(pt.x(), pt.y())
-            
+
             # Check layers in reverse order (last layer wins)
             sampled_val = np.nan
             for layer in reversed(rasters):
@@ -721,7 +720,7 @@ class TimeOfConcentrationDialog(QDialog):
                 if self.is_valid_sample(val, ok, layer):
                     sampled_val = val
                     break  # Use first valid sample from highest priority layer
-            
+
             vals.append(sampled_val)
 
         return dists, vals
@@ -733,7 +732,9 @@ class TimeOfConcentrationDialog(QDialog):
             self.long_section_vals = []
             return
 
-        dists, vals = self.sample_line(self.alignment_geom, self.dem_layers, num_points=500)
+        dists, vals = self.sample_line(
+            self.alignment_geom, self.dem_layers, num_points=500
+        )
         self.long_section_dists = dists
         self.long_section_vals = vals
 
@@ -756,10 +757,12 @@ class TimeOfConcentrationDialog(QDialog):
                 label = "Profile"
                 if self.dem_layers:
                     label = f"{self.dem_layers[-1].name()} (Top Layer)"
-                
-                self.ax_long.plot(dists_valid, vals_valid, "b-", linewidth=2, label=label)
+
+                self.ax_long.plot(
+                    dists_valid, vals_valid, "b-", linewidth=2, label=label
+                )
                 self.ax_long.fill_between(dists_valid, vals_valid, alpha=0.3)
-                
+
                 # Draw equal area slope line (black dashed)
                 # Equal area method: straight line with same area under it as the profile
                 # Area under line: (h1 + h2) / 2 * distance_range = Area_profile
@@ -769,7 +772,7 @@ class TimeOfConcentrationDialog(QDialog):
                     end_dist = dists_valid[-1]
                     start_dist = dists_valid[0]
                     distance_range = end_dist - start_dist  # Total distance span
-                    
+
                     if distance_range > 0:
                         # Calculate area under the profile
                         area = trapezoid(vals_valid, dists_valid)
@@ -777,19 +780,25 @@ class TimeOfConcentrationDialog(QDialog):
                         # Equal area formula: area = (h1 + h2) / 2 * distance_range
                         # Solve for h2: h2 = 2*area/distance_range - h1
                         h2 = (2.0 * area / distance_range) - h1
-                        self.ax_long.plot([start_dist, end_dist], [h1, h2], "k--", linewidth=2, label="Equal Area Slope")
-                
+                        self.ax_long.plot(
+                            [start_dist, end_dist],
+                            [h1, h2],
+                            "k--",
+                            linewidth=2,
+                            label="Equal Area Slope",
+                        )
+
                 self.ax_long.legend()
 
         self.canvas_plot.draw()
 
     def calculate_slope_equal_area(self):
         """Calculate slope using equal area method: Sc = 2A/L^2
-        
+
         Where:
         - A is the area under the long section profile
         - L is the total length of the alignment
-        
+
         The equal area slope represents a uniform slope that would have
         the same cumulative distribution as the actual profile.
         """
@@ -814,7 +823,7 @@ class TimeOfConcentrationDialog(QDialog):
         if L == 0:
             return 0.0
 
-        slope = 2.0 * area / (L ** 2)
+        slope = 2.0 * area / (L**2)
         return slope
 
     def on_calculate(self):
@@ -831,7 +840,9 @@ class TimeOfConcentrationDialog(QDialog):
             )
             return
 
-        if not self.long_section_vals or all(np.isnan(v) for v in self.long_section_vals):
+        if not self.long_section_vals or all(
+            np.isnan(v) for v in self.long_section_vals
+        ):
             QMessageBox.warning(
                 self,
                 "Calculation Error",
@@ -856,35 +867,45 @@ class TimeOfConcentrationDialog(QDialog):
             c_val = float(settings.value("tuflow_tools/time_of_concentration/C", 0.8))
             self.spin_c.setValue(c_val)
             # CN must be float to preserve decimals (e.g., 90.8)
-            cn_val = float(settings.value("tuflow_tools/time_of_concentration/CN", 70.0))
+            cn_val = float(
+                settings.value("tuflow_tools/time_of_concentration/CN", 70.0)
+            )
             self.spin_cn.setValue(cn_val)
         except Exception:
             pass
 
         # DEM Layers - restore from list
-        dem_list = settings.value("tuflow_tools/time_of_concentration/dem_layers", [], type=list)
+        dem_list = settings.value(
+            "tuflow_tools/time_of_concentration/dem_layers", [], type=list
+        )
         self.dem_layers = []
         for entry in dem_list:
             parts = entry.split("|")
             layer_id = parts[0]
             source = parts[1] if len(parts) > 1 else ""
-            
+
             layer = QgsProject.instance().mapLayer(layer_id)
             if not layer and source:
                 # Try to find by source
                 target_layers = QgsProject.instance().mapLayers().values()
                 for tl in target_layers:
-                    if isinstance(tl, QgsRasterLayer) and tl.source() == source and tl.isValid():
+                    if (
+                        isinstance(tl, QgsRasterLayer)
+                        and tl.source() == source
+                        and tl.isValid()
+                    ):
                         layer = tl
                         break
-            
+
             if layer and isinstance(layer, QgsRasterLayer) and layer.isValid():
                 self.dem_layers.append(layer)
-        
+
         self.refresh_table()
 
         # Alignment - restore from WKT (load last to trigger updates)
-        alignment_wkt = settings.value("tuflow_tools/time_of_concentration/alignment_wkt", None)
+        alignment_wkt = settings.value(
+            "tuflow_tools/time_of_concentration/alignment_wkt", None
+        )
         if alignment_wkt:
             geom = QgsGeometry.fromWkt(alignment_wkt)
             if geom and not geom.isEmpty():
@@ -895,7 +916,7 @@ class TimeOfConcentrationDialog(QDialog):
         settings = QSettings()
         settings.setValue("tuflow_tools/time_of_concentration/C", self.spin_c.value())
         settings.setValue("tuflow_tools/time_of_concentration/CN", self.spin_cn.value())
-        
+
         # Save DEM layers as list of "layer_id|source"
         dem_list = []
         for layer in self.dem_layers:
@@ -904,10 +925,13 @@ class TimeOfConcentrationDialog(QDialog):
             except RuntimeError:
                 pass
         settings.setValue("tuflow_tools/time_of_concentration/dem_layers", dem_list)
-        
+
         # Save alignment geometry
         if self.alignment_geom:
-            settings.setValue("tuflow_tools/time_of_concentration/alignment_wkt", self.alignment_geom.asWkt())
+            settings.setValue(
+                "tuflow_tools/time_of_concentration/alignment_wkt",
+                self.alignment_geom.asWkt(),
+            )
 
 
 def run_time_of_concentration_tool():

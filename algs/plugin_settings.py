@@ -120,7 +120,9 @@ class PluginSettingsDialog(QDialog):
         widget = QWidget()
         layout = QVBoxLayout()
 
-        layout.addWidget(QLabel("Style Mappings (comma-separated supported, top item has priority):"))
+        layout.addWidget(
+            QLabel("Style Mappings (comma-separated supported, top item has priority):")
+        )
 
         # Create table
         self.style_table = QTableWidget()

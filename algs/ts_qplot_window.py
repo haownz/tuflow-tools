@@ -500,7 +500,9 @@ class TimeSeriesPlotWindow(QDialog):
                 # Resolve 'Q <ID>' header using EXACT token match
                 src, q_header = self._find_q_column_exact(sources, id_val)
                 if src is None or q_header is None:
-                    info_lines.append(f"{map_layer.name()}: no 'Q {id_val}' column (skipped)")
+                    info_lines.append(
+                        f"{map_layer.name()}: no 'Q {id_val}' column (skipped)"
+                    )
                     continue
 
                 # Read time + Q

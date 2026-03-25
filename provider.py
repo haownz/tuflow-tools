@@ -88,6 +88,4 @@ class TuflowProcessingProvider(QgsProcessingProvider):
             InundationBoundaryAlgorithm()
         )  # Trace flooded footprints from depths
         self.addAlgorithm(RastersComparisonAlgorithm())  # compare generic rasters
-        self.addAlgorithm(
-            DepthDischargeCurveAlgorithm()
-        )  # build a composite Q-H curve
+        self.addAlgorithm(DepthDischargeCurveAlgorithm())  # build a composite Q-H curve

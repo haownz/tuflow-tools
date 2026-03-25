@@ -13,9 +13,7 @@ from qgis.core import (
     QgsProcessingParameterNumber,
     QgsProcessingParameterRasterDestination,
     QgsProject,
-    QgsRasterLayer,
     QgsCoordinateTransform,
-    QgsRectangle,
 )
 from osgeo import gdal
 import numpy as np
@@ -106,7 +104,9 @@ class RastersComparisonAlgorithm(QgsProcessingAlgorithm):
         )
         self.addParameter(
             QgsProcessingParameterRasterDestination(
-                self.P_OUTPUT, self.tr("Raster Difference Output"), QgsProcessing.TEMPORARY_OUTPUT
+                self.P_OUTPUT,
+                self.tr("Raster Difference Output"),
+                QgsProcessing.TEMPORARY_OUTPUT,
             )
         )
 
@@ -152,7 +152,9 @@ class RastersComparisonAlgorithm(QgsProcessingAlgorithm):
     def processAlgorithm(self, parameters, context, feedback):
         raster1_layer = self.parameterAsRasterLayer(parameters, self.P_RASTER1, context)
         raster2_layer = self.parameterAsRasterLayer(parameters, self.P_RASTER2, context)
-        clip_poly_layer = self.parameterAsVectorLayer(parameters, self.P_CLIP_POLY, context)
+        clip_poly_layer = self.parameterAsVectorLayer(
+            parameters, self.P_CLIP_POLY, context
+        )
         extent_param = self.parameterAsExtent(parameters, self.P_EXTENT, context)
         target_crs_param = self.parameterAsCrs(parameters, self.P_TARGET_CRS, context)
         target_res = self.parameterAsDouble(parameters, self.P_TARGET_RES, context)
@@ -169,10 +171,12 @@ class RastersComparisonAlgorithm(QgsProcessingAlgorithm):
 
         # Determine target resolution
         r1_res = min(
-            raster1_layer.rasterUnitsPerPixelX(), abs(raster1_layer.rasterUnitsPerPixelY())
+            raster1_layer.rasterUnitsPerPixelX(),
+            abs(raster1_layer.rasterUnitsPerPixelY()),
         )
         r2_res = min(
-            raster2_layer.rasterUnitsPerPixelX(), abs(raster2_layer.rasterUnitsPerPixelY())
+            raster2_layer.rasterUnitsPerPixelX(),
+            abs(raster2_layer.rasterUnitsPerPixelY()),
         )
 
         if target_res <= 0:
@@ -361,7 +365,7 @@ class RastersComparisonAlgorithm(QgsProcessingAlgorithm):
                                     feedback.pushInfo(f"Applied style: {qml_file}")
                                     style_applied = True
                                     break
-                            
+
                             if style_applied:
                                 break
             except Exception as se:

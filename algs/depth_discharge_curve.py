@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import pandas as pd
-import os
 
 from qgis.PyQt.QtWidgets import (
     QDialog,
@@ -15,7 +14,7 @@ from qgis.PyQt.QtWidgets import (
     QMessageBox,
     QGroupBox,
     QSplitter,
-    QLabel
+    QLabel,
 )
 from qgis.PyQt.QtCore import Qt, QCoreApplication, QSettings
 from qgis.core import QgsProcessingAlgorithm
@@ -27,6 +26,7 @@ from matplotlib.figure import Figure
 
 _LIVE_WINDOWS = []
 
+
 class DepthDischargeCurveDialog(QDialog):
     """Interactive UI for Depth Discharge Curve calculation."""
 
@@ -36,10 +36,10 @@ class DepthDischargeCurveDialog(QDialog):
         self.resize(1000, 700)
         self.df = None
         self.Q_pipe_full = 0.0
-        
+
         # Load settings
         self.settings = QSettings()
-        
+
         def load_setting(key, default):
             val = self.settings.value(f"tuflow_tools/depth_discharge/{key}", default)
             try:
@@ -48,18 +48,20 @@ class DepthDischargeCurveDialog(QDialog):
                 return default
 
         main_layout = QHBoxLayout(self)
-        
+
         # Splitter to separate inputs and plot
         splitter = QSplitter(Qt.Horizontal)
         main_layout.addWidget(splitter)
-        
+
         # --- Left Panel: Inputs ---
         left_widget = QWidget()
         left_layout = QVBoxLayout(left_widget)
         left_layout.setContentsMargins(0, 0, 0, 0)
 
         # Helper function to create spinboxes
-        def create_spinbox(value, min_val=-9999.0, max_val=9999.0, decimals=4, step=0.1):
+        def create_spinbox(
+            value, min_val=-9999.0, max_val=9999.0, decimals=4, step=0.1
+        ):
             spin = QDoubleSpinBox()
             spin.setRange(min_val, max_val)
             spin.setDecimals(decimals)
@@ -74,7 +76,9 @@ class DepthDischargeCurveDialog(QDialog):
         self.spin_base_level = create_spinbox(load_setting("base_level", 14.0))
         self.spin_orifice_invert = create_spinbox(load_setting("orifice_invert", 14.0))
         self.spin_lid_level = create_spinbox(load_setting("lid_level", 15.5))
-        self.spin_pipe_invert = create_spinbox(load_setting("pipe_invert", 13.8)) # Not used directly in calc but kept for context
+        self.spin_pipe_invert = create_spinbox(
+            load_setting("pipe_invert", 13.8)
+        )  # Not used directly in calc but kept for context
         layout_levels.addRow("Base Level (for Depth):", self.spin_base_level)
         layout_levels.addRow("Orifice Invert:", self.spin_orifice_invert)
         layout_levels.addRow("Dome Lid:", self.spin_lid_level)
@@ -84,7 +88,9 @@ class DepthDischargeCurveDialog(QDialog):
         # 2. Geometry Group
         group_geom = QGroupBox("Geometry (m)")
         layout_geom = QFormLayout()
-        self.spin_d_orifice = create_spinbox(load_setting("d_orifice", 0.0564), min_val=0)
+        self.spin_d_orifice = create_spinbox(
+            load_setting("d_orifice", 0.0564), min_val=0
+        )
         self.spin_d_dome = create_spinbox(load_setting("d_dome", 1.05), min_val=0)
         self.spin_d_pipe = create_spinbox(load_setting("d_pipe", 0.75), min_val=0)
         layout_geom.addRow("Orifice Diameter:", self.spin_d_orifice)
@@ -95,7 +101,9 @@ class DepthDischargeCurveDialog(QDialog):
         # 3. Coefficients Group
         group_coeffs = QGroupBox("Coefficients")
         layout_coeffs = QFormLayout()
-        self.spin_cd_orifice = create_spinbox(load_setting("cd_orifice", 0.65), min_val=0)
+        self.spin_cd_orifice = create_spinbox(
+            load_setting("cd_orifice", 0.65), min_val=0
+        )
         self.spin_cd_weir = create_spinbox(load_setting("cd_weir", 1.84), min_val=0)
         layout_coeffs.addRow("Orifice Cd:", self.spin_cd_orifice)
         layout_coeffs.addRow("Weir Cd:", self.spin_cd_weir)
@@ -104,8 +112,12 @@ class DepthDischargeCurveDialog(QDialog):
         # 4. Pipe Parameters Group
         group_pipe = QGroupBox("Pipe Parameters")
         layout_pipe = QFormLayout()
-        self.spin_slope = create_spinbox(load_setting("slope", 0.01), min_val=0, decimals=4)
-        self.spin_manning = create_spinbox(load_setting("manning", 0.013), min_val=0, decimals=4)
+        self.spin_slope = create_spinbox(
+            load_setting("slope", 0.01), min_val=0, decimals=4
+        )
+        self.spin_manning = create_spinbox(
+            load_setting("manning", 0.013), min_val=0, decimals=4
+        )
         layout_pipe.addRow("Slope (m/m):", self.spin_slope)
         layout_pipe.addRow("Manning's n:", self.spin_manning)
         group_pipe.setLayout(layout_pipe)
@@ -129,19 +141,21 @@ class DepthDischargeCurveDialog(QDialog):
         left_layout.addWidget(group_range)
 
         self.lbl_capacity = QLabel("Pipe Capacity: -- m³/s")
-        self.lbl_capacity.setStyleSheet("font-weight: bold; color: #0055a4; margin-top: 10px;")
+        self.lbl_capacity.setStyleSheet(
+            "font-weight: bold; color: #0055a4; margin-top: 10px;"
+        )
         left_layout.addWidget(self.lbl_capacity)
-        
+
         btn_layout = QHBoxLayout()
         btn_export = QPushButton("Export to CSV")
         btn_export.clicked.connect(self.export_csv)
         btn_default = QPushButton("Restore Defaults")
         btn_default.clicked.connect(self.restore_defaults)
-        
+
         btn_layout.addWidget(btn_default)
         btn_layout.addWidget(btn_export)
         left_layout.addLayout(btn_layout)
-        
+
         left_layout.addStretch()
         splitter.addWidget(left_widget)
 
@@ -149,7 +163,7 @@ class DepthDischargeCurveDialog(QDialog):
         right_widget = QWidget()
         right_layout = QVBoxLayout(right_widget)
         right_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         self.fig = Figure(figsize=(8, 6))
         self.canvas = FigureCanvas(self.fig)
         self.toolbar = NavigationToolbar(self.canvas, self)
@@ -160,7 +174,7 @@ class DepthDischargeCurveDialog(QDialog):
         right_layout.addWidget(self.toolbar)
         right_layout.addWidget(self.canvas)
         splitter.addWidget(right_widget)
-        
+
         splitter.setSizes([300, 700])
 
         # Initial plot
@@ -171,7 +185,7 @@ class DepthDischargeCurveDialog(QDialog):
         base_level = self.spin_base_level.value()
         orifice_invert = self.spin_orifice_invert.value()
         lid_level = self.spin_lid_level.value()
-        
+
         d_orifice = self.spin_d_orifice.value()
         d_dome = self.spin_d_dome.value()
         d_pipe = self.spin_d_pipe.value()
@@ -203,13 +217,15 @@ class DepthDischargeCurveDialog(QDialog):
         # Manning full pipe capacity
         self.Q_pipe_full = 0.0
         if n_manning > 0:
-            self.Q_pipe_full = (1/n_manning) * A_pipe * (R_pipe**(2/3)) * (slope**0.5)
+            self.Q_pipe_full = (
+                (1 / n_manning) * A_pipe * (R_pipe ** (2 / 3)) * (slope**0.5)
+            )
 
         self.lbl_capacity.setText(f"Pipe Capacity: {self.Q_pipe_full:.3f} m³/s")
 
         results = []
         wls = np.arange(wl_min, wl_max + wl_step, wl_step)
-        
+
         for WL in wls:
             # --- ORIFICE FLOW ---
             if WL > orifice_invert:
@@ -221,7 +237,7 @@ class DepthDischargeCurveDialog(QDialog):
             # --- WEIR FLOW ---
             if WL > lid_level:
                 H_weir = WL - lid_level
-                Q_weir = cd_weir * L_weir * (H_weir ** 1.5)
+                Q_weir = cd_weir * L_weir * (H_weir**1.5)
             else:
                 Q_weir = 0.0
 
@@ -234,32 +250,55 @@ class DepthDischargeCurveDialog(QDialog):
             # Depth above base level
             depth = WL - base_level
 
-            results.append([WL, depth, Q_orifice, Q_weir, Q_total, self.Q_pipe_full, Q_final])
+            results.append(
+                [WL, depth, Q_orifice, Q_weir, Q_total, self.Q_pipe_full, Q_final]
+            )
 
-        self.df = pd.DataFrame(results, columns=[
-            "Water Level (m)",
-            "Depth (m)",
-            "Q Orifice (m3/s)",
-            "Q Weir (m3/s)",
-            "Q Total (m3/s)",
-            "Pipe Capacity (m3/s)",
-            "Q Final (m3/s)"
-        ])
+        self.df = pd.DataFrame(
+            results,
+            columns=[
+                "Water Level (m)",
+                "Depth (m)",
+                "Q Orifice (m3/s)",
+                "Q Weir (m3/s)",
+                "Q Total (m3/s)",
+                "Pipe Capacity (m3/s)",
+                "Q Final (m3/s)",
+            ],
+        )
 
         # Render Plot
         self.ax.clear()
-        self.ax.plot(self.df["Depth (m)"], self.df["Q Final (m3/s)"], label="Q Final", linewidth=3, color='blue')
-        self.ax.plot(self.df["Depth (m)"], self.df["Q Orifice (m3/s)"], label="Q Orifice", linestyle='--')
-        self.ax.plot(self.df["Depth (m)"], self.df["Q Weir (m3/s)"], label="Q Weir", linestyle='-.')
-        self.ax.axhline(y=self.Q_pipe_full, color='r', linestyle=':', label='Pipe Capacity')
-        
+        self.ax.plot(
+            self.df["Depth (m)"],
+            self.df["Q Final (m3/s)"],
+            label="Q Final",
+            linewidth=3,
+            color="blue",
+        )
+        self.ax.plot(
+            self.df["Depth (m)"],
+            self.df["Q Orifice (m3/s)"],
+            label="Q Orifice",
+            linestyle="--",
+        )
+        self.ax.plot(
+            self.df["Depth (m)"],
+            self.df["Q Weir (m3/s)"],
+            label="Q Weir",
+            linestyle="-.",
+        )
+        self.ax.axhline(
+            y=self.Q_pipe_full, color="r", linestyle=":", label="Pipe Capacity"
+        )
+
         self.ax.set_xlabel("Depth (m) [above Base Level]")
         self.ax.set_ylabel("Discharge (m3/s)")
         self.ax.set_title("Composite Depth Discharge Curve")
         self.ax.legend()
         self.ax.grid(True, alpha=0.3)
         self.fig.tight_layout()
-        
+
         self.canvas.draw()
 
     def export_csv(self):
@@ -268,34 +307,62 @@ class DepthDischargeCurveDialog(QDialog):
             return
 
         file_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Save CSV",
-            "composite_QH_curve.csv",
-            "CSV files (*.csv)"
+            self, "Save CSV", "composite_QH_curve.csv", "CSV files (*.csv)"
         )
-        
+
         if file_path:
             try:
                 self.df.to_csv(file_path, index=False)
-                QMessageBox.information(self, "Success", f"CSV successfully saved to:\n{file_path}")
+                QMessageBox.information(
+                    self, "Success", f"CSV successfully saved to:\n{file_path}"
+                )
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to save CSV:\n{e}")
 
     def save_settings(self):
-        self.settings.setValue("tuflow_tools/depth_discharge/base_level", self.spin_base_level.value())
-        self.settings.setValue("tuflow_tools/depth_discharge/orifice_invert", self.spin_orifice_invert.value())
-        self.settings.setValue("tuflow_tools/depth_discharge/lid_level", self.spin_lid_level.value())
-        self.settings.setValue("tuflow_tools/depth_discharge/pipe_invert", self.spin_pipe_invert.value())
-        self.settings.setValue("tuflow_tools/depth_discharge/d_orifice", self.spin_d_orifice.value())
-        self.settings.setValue("tuflow_tools/depth_discharge/d_dome", self.spin_d_dome.value())
-        self.settings.setValue("tuflow_tools/depth_discharge/d_pipe", self.spin_d_pipe.value())
-        self.settings.setValue("tuflow_tools/depth_discharge/cd_orifice", self.spin_cd_orifice.value())
-        self.settings.setValue("tuflow_tools/depth_discharge/cd_weir", self.spin_cd_weir.value())
-        self.settings.setValue("tuflow_tools/depth_discharge/slope", self.spin_slope.value())
-        self.settings.setValue("tuflow_tools/depth_discharge/manning", self.spin_manning.value())
-        self.settings.setValue("tuflow_tools/depth_discharge/wl_min", self.spin_wl_min.value())
-        self.settings.setValue("tuflow_tools/depth_discharge/wl_max", self.spin_wl_max.value())
-        self.settings.setValue("tuflow_tools/depth_discharge/wl_step", self.spin_wl_step.value())
+        self.settings.setValue(
+            "tuflow_tools/depth_discharge/base_level", self.spin_base_level.value()
+        )
+        self.settings.setValue(
+            "tuflow_tools/depth_discharge/orifice_invert",
+            self.spin_orifice_invert.value(),
+        )
+        self.settings.setValue(
+            "tuflow_tools/depth_discharge/lid_level", self.spin_lid_level.value()
+        )
+        self.settings.setValue(
+            "tuflow_tools/depth_discharge/pipe_invert", self.spin_pipe_invert.value()
+        )
+        self.settings.setValue(
+            "tuflow_tools/depth_discharge/d_orifice", self.spin_d_orifice.value()
+        )
+        self.settings.setValue(
+            "tuflow_tools/depth_discharge/d_dome", self.spin_d_dome.value()
+        )
+        self.settings.setValue(
+            "tuflow_tools/depth_discharge/d_pipe", self.spin_d_pipe.value()
+        )
+        self.settings.setValue(
+            "tuflow_tools/depth_discharge/cd_orifice", self.spin_cd_orifice.value()
+        )
+        self.settings.setValue(
+            "tuflow_tools/depth_discharge/cd_weir", self.spin_cd_weir.value()
+        )
+        self.settings.setValue(
+            "tuflow_tools/depth_discharge/slope", self.spin_slope.value()
+        )
+        self.settings.setValue(
+            "tuflow_tools/depth_discharge/manning", self.spin_manning.value()
+        )
+        self.settings.setValue(
+            "tuflow_tools/depth_discharge/wl_min", self.spin_wl_min.value()
+        )
+        self.settings.setValue(
+            "tuflow_tools/depth_discharge/wl_max", self.spin_wl_max.value()
+        )
+        self.settings.setValue(
+            "tuflow_tools/depth_discharge/wl_step", self.spin_wl_step.value()
+        )
 
     def restore_defaults(self):
         # Block signals briefly so we only update the plot once at the end
@@ -396,4 +463,3 @@ class DepthDischargeCurveAlgorithm(QgsProcessingAlgorithm):
     def processAlgorithm(self, parameters, context, feedback):
         run_depth_discharge_tool()
         return {}
-

@@ -49,6 +49,7 @@
 ### 🛠️ Pre-processing & GIS Utilities
 | Tool | Description |
 |---|---|
+| **Depth Discharge Curve** | Build composite Q–H curves (orifice, weir, pipe capacity) with interactive plotting and CSV export |
 | **Land Cover Add Fields** | Add TUFLOW-specific material and soil fields to land cover layers |
 | **Process Land Cover** | Clip, process, and merge land cover data from geodatabases for TUFLOW input |
 | **GIS Location** | Utilities for spatial referencing and coordinate location |

@@ -39,7 +39,7 @@ class StyleManager:
         # Find matching pattern
         for pattern_str, qml_file_str, layer_type in StyleManager.get_style_mappings():
             patterns = [p.strip() for p in pattern_str.split(",")]
-            
+
             # Check if any pattern matches the layer name
             if any(fnmatch.fnmatch(layer_name, p) for p in patterns if p):
                 # Check layer type compatibility
@@ -50,7 +50,7 @@ class StyleManager:
 
                 qml_files = [q.strip() for q in qml_file_str.split(",")]
                 style_applied = False
-                
+
                 for qml_file in qml_files:
                     if not qml_file:
                         continue
@@ -73,7 +73,9 @@ class StyleManager:
                         return True
                     else:
                         QgsMessageLog.logMessage(
-                            f"Failed to apply style '{qml_file}': {msg}", "TUFLOW Tools", Qgis.Warning
+                            f"Failed to apply style '{qml_file}': {msg}",
+                            "TUFLOW Tools",
+                            Qgis.Warning,
                         )
 
                 if not style_applied:
