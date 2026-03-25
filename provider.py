@@ -27,6 +27,7 @@ from .algs.wse_comparison import WSEComparisonAlgorithm
 from .algs.lc_add_fields import LandCoverAddFieldsAlgorithm
 from .algs.inundation_boundary import InundationBoundaryAlgorithm
 from .algs.rasters_comparison import RastersComparisonAlgorithm
+from .algs.depth_discharge_curve import DepthDischargeCurveAlgorithm
 
 
 class TuflowProcessingProvider(QgsProcessingProvider):
@@ -87,3 +88,6 @@ class TuflowProcessingProvider(QgsProcessingProvider):
             InundationBoundaryAlgorithm()
         )  # Trace flooded footprints from depths
         self.addAlgorithm(RastersComparisonAlgorithm())  # compare generic rasters
+        self.addAlgorithm(
+            DepthDischargeCurveAlgorithm()
+        )  # build a composite Q-H curve

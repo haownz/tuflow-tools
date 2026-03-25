@@ -341,18 +341,28 @@ class RastersComparisonAlgorithm(QgsProcessingAlgorithm):
                 style_path = PluginSettings.get_style_path()
                 if style_path and os.path.isdir(style_path):
                     for (
-                        pattern,
-                        qml_file,
+                        pattern_str,
+                        qml_file_str,
                         layer_type,
                     ) in StyleManager.get_style_mappings():
-                        if layer_type == "raster" and fnmatch.fnmatch(
-                            layer_name, pattern
+                        patterns = [p.strip() for p in pattern_str.split(",")]
+                        if layer_type == "raster" and any(
+                            fnmatch.fnmatch(layer_name, p) for p in patterns if p
                         ):
-                            src_qml = os.path.join(style_path, qml_file)
-                            if os.path.exists(src_qml):
-                                dst_qml = os.path.splitext(out_path)[0] + ".qml"
-                                shutil.copy2(src_qml, dst_qml)
-                                feedback.pushInfo(f"Applied style: {qml_file}")
+                            qml_files = [q.strip() for q in qml_file_str.split(",")]
+                            style_applied = False
+                            for qml_file in qml_files:
+                                if not qml_file:
+                                    continue
+                                src_qml = os.path.join(style_path, qml_file)
+                                if os.path.exists(src_qml):
+                                    dst_qml = os.path.splitext(out_path)[0] + ".qml"
+                                    shutil.copy2(src_qml, dst_qml)
+                                    feedback.pushInfo(f"Applied style: {qml_file}")
+                                    style_applied = True
+                                    break
+                            
+                            if style_applied:
                                 break
             except Exception as se:
                 feedback.reportError(f"Could not apply style: {se}")

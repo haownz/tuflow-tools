@@ -120,13 +120,13 @@ class PluginSettingsDialog(QDialog):
         widget = QWidget()
         layout = QVBoxLayout()
 
-        layout.addWidget(QLabel("Style Mappings (top item has priority):"))
+        layout.addWidget(QLabel("Style Mappings (comma-separated supported, top item has priority):"))
 
         # Create table
         self.style_table = QTableWidget()
         self.style_table.setColumnCount(3)
         self.style_table.setHorizontalHeaderLabels(
-            ["Pattern", "QML File", "Layer Type"]
+            ["Pattern(s)", "QML File(s)", "Layer Type"]
         )
 
         # Enable drag and drop for reordering

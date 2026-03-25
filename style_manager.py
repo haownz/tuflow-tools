@@ -37,37 +37,50 @@ class StyleManager:
             return False
 
         # Find matching pattern
-        for pattern, qml_file, layer_type in StyleManager.get_style_mappings():
-            if fnmatch.fnmatch(layer_name, pattern):
+        for pattern_str, qml_file_str, layer_type in StyleManager.get_style_mappings():
+            patterns = [p.strip() for p in pattern_str.split(",")]
+            
+            # Check if any pattern matches the layer name
+            if any(fnmatch.fnmatch(layer_name, p) for p in patterns if p):
                 # Check layer type compatibility
                 if layer_type == "vector" and not is_vector:
                     continue
                 if layer_type == "raster" and not is_raster:
                     continue
 
-                qml_path = os.path.join(style_path, qml_file)
+                qml_files = [q.strip() for q in qml_file_str.split(",")]
+                style_applied = False
+                
+                for qml_file in qml_files:
+                    if not qml_file:
+                        continue
 
-                if not os.path.exists(qml_path):
+                    qml_path = os.path.join(style_path, qml_file)
+
+                    if not os.path.exists(qml_path):
+                        continue
+
+                    # Load style
+                    msg, success = layer.loadNamedStyle(qml_path)
+                    if success:
+                        layer.triggerRepaint()
+                        QgsMessageLog.logMessage(
+                            f"Applied style '{qml_file}' to layer '{layer_name}'",
+                            "TUFLOW Tools",
+                            Qgis.Info,
+                        )
+                        style_applied = True
+                        return True
+                    else:
+                        QgsMessageLog.logMessage(
+                            f"Failed to apply style '{qml_file}': {msg}", "TUFLOW Tools", Qgis.Warning
+                        )
+
+                if not style_applied:
                     QgsMessageLog.logMessage(
-                        f"Style file not found: {qml_path}",
+                        f"Style files not found or failed to load for layer '{layer_name}': {qml_file_str}",
                         "TUFLOW Tools",
                         Qgis.Warning,
-                    )
-                    return False
-
-                # Load style
-                msg, success = layer.loadNamedStyle(qml_path)
-                if success:
-                    layer.triggerRepaint()
-                    QgsMessageLog.logMessage(
-                        f"Applied style '{qml_file}' to layer '{layer_name}'",
-                        "TUFLOW Tools",
-                        Qgis.Info,
-                    )
-                    return True
-                else:
-                    QgsMessageLog.logMessage(
-                        f"Failed to apply style: {msg}", "TUFLOW Tools", Qgis.Warning
                     )
                     return False
 
