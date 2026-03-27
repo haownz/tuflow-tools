@@ -10,3 +10,6 @@ __pycache__/
 
 # Linting logs
 ruff_errors.*
+
+# AI Tools
+.continueignore
