@@ -7,7 +7,7 @@
 **A comprehensive QGIS plugin for TUFLOW hydraulic modelling — pre-processing, post-processing, and analysis.**
 
 [![QGIS](https://img.shields.io/badge/QGIS-3.22%2B-green?logo=qgis)](https://qgis.org)
-[![Version](https://img.shields.io/badge/version-1.3.6-blue)](https://github.com/haownz/tuflow-tools/releases)
+[![Version](https://img.shields.io/badge/version-1.4.0-blue)](https://github.com/haownz/tuflow-tools/releases)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-informational)]()
 
@@ -45,11 +45,13 @@
 |---|---|
 | **Flood Hazard Classify** | Classify flood hazard levels (0–3) from depth and velocity rasters |
 | **Inundation Boundary** | Trace closed polygon flood extents from a depth raster using a user-defined cutoff depth |
+| **Time of Concentration** | Calculate time of concentration using multi-layer DEM support |
 
 ### 🛠️ Pre-processing & GIS Utilities
 | Tool | Description |
 |---|---|
 | **Depth Discharge Curve** | Build composite Q–H curves (orifice, weir, pipe capacity) with interactive plotting and CSV export |
+| **Merge Rasters** | Merge multiple raster files together seamlessly |
 | **Land Cover Add Fields** | Add TUFLOW-specific material and soil fields to land cover layers |
 | **Process Land Cover** | Clip, process, and merge land cover data from geodatabases for TUFLOW input |
 | **GIS Location** | Utilities for spatial referencing and coordinate location |

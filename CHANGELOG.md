@@ -1,5 +1,16 @@
 # Changelog
 
+## Version 1.4.0 (2026-03-27)
+### New Features
+- **Depth Discharge Curve**: Build composite Q–H curves (orifice, weir, pipe capacity) with interactive plotting and CSV export. Includes support for multiple QML fallbacks.
+- **Time of Concentration**: Added Time of Concentration algorithm with multi-layer DEM support.
+- **Merge Rasters**: Added a new tool to efficiently merge multiple raster files.
+
+### Improvements
+- **Code Quality**: Comprehensive code quality and formatting improvements across the plugin utilizing the Ruff formatter.
+- **Privacy & Security**: Removed sensitive metadata (emails, company name) and implemented stricter workspace ignoring (`.gitignore` rules for `.github` and AI configurations).
+- **Workspace Cleanup**: Tidied up development artifacts, internal dev notes, and unnecessary documentation.
+
 ## Version 1.3.6 (2026-01-28)
 ### New Features
 - **Cross Sections along Alignment**:

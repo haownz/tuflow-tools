@@ -2,7 +2,7 @@
 [general]
 name=TUFLOW Tools
 description=Comprehensive analysis tools for TUFLOW hydraulic modeling results
-version=1.3.6
+version=1.4.0
 qgisMinimumVersion=3.22
 qgisMaximumVersion=3.99
 author=Dr. Hao Wu
@@ -16,7 +16,7 @@ repository=https://github.com/haownz/tuflow-tools
 tags=TUFLOW,hydraulic,modeling,flood,analysis,raster,vector,post-processing
 experimental=False
 deprecated=False
-changelog=Version 1.3.6 (2026-01-28): Added interactive "Cross Sections along Alignment" tool with PDF export; refactored "Load Sample Points" algorithm with improved UI and robustness.
+changelog=Version 1.4.0 (2026-03-27): Added Depth Discharge Curve, Time of Concentration, and Merge Rasters tools; comprehensive code quality improvements with Ruff; enhanced privacy and workspace settings.
 
 [requirements]
 python_requires=>=3.8
