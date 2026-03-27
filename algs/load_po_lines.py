@@ -381,37 +381,35 @@ class PreviewDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Preview PO Lines")
         self.setMinimumSize(600, 400)
+        self.latest_files = list(latest_files) if latest_files else []
         layout = QVBoxLayout(self)
-        self.table = QTableWidget(len(latest_files), 3)
+
+        # Add Layer Section
+        from qgis.PyQt.QtWidgets import QComboBox
+        add_lyt = QHBoxLayout()
+        self.add_combo = QComboBox()
+        btn_add = QPushButton("Add to List")
+        btn_add.clicked.connect(self.add_selected_layer)
+        add_lyt.addWidget(QLabel("Add other raster layer:"))
+        add_lyt.addWidget(self.add_combo, 1)
+        add_lyt.addWidget(btn_add)
+        layout.addLayout(add_lyt)
+
+        self.table = QTableWidget(0, 3)
         self.table.setHorizontalHeaderLabels(["Select", "Scenario", "Status"])
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
         self.table.setColumnWidth(0, 50)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
 
-        for i, f in enumerate(latest_files):
-            cb = QCheckBox()
-            cb.setChecked(False)
-            self.table.setCellWidget(i, 0, cb)
-
-            name = os.path.splitext(os.path.basename(f))[0]
-            item_name = QTableWidgetItem(name)
-            item_name.setData(Qt.UserRole, f)
-            self.table.setItem(i, 1, item_name)
-
-            try:
-                path = derive_poline_path_from_raster(f, _guess_suffix(f))
-                status = "Ready" if os.path.exists(path) else "Missing"
-            except Exception:
-                status = "Skipped"
-            item = QTableWidgetItem(status)
-            if status == "Missing":
-                item.setForeground(QColor(200, 0, 0))
-            self.table.setItem(i, 2, item)
+        for f in self.latest_files:
+            self._add_file_to_table(f, checked=False)
 
         self.table.resizeColumnToContents(2)
         self.table.setColumnWidth(2, int(self.table.columnWidth(2) * 1.5))
 
         layout.addWidget(self.table)
+
+        self.populate_add_combo()
 
         sel_lyt = QHBoxLayout()
         btn_all = QPushButton("Select All")
@@ -429,6 +427,47 @@ class PreviewDialog(QDialog):
         ok.clicked.connect(self.accept)
         btn_lyt.addWidget(ok)
         layout.addLayout(btn_lyt)
+
+    def populate_add_combo(self):
+        self.add_combo.clear()
+        existing_paths = set(os.path.normpath(f).lower() for f in self.latest_files)
+        for layer in QgsProject.instance().mapLayers().values():
+            if isinstance(layer, QgsRasterLayer) and layer.isValid():
+                src = layer.source()
+                if os.path.exists(src):
+                    n_src = os.path.normpath(src).lower()
+                    if n_src not in existing_paths:
+                        self.add_combo.addItem(layer.name(), src)
+
+    def add_selected_layer(self):
+        src = self.add_combo.currentData()
+        if src:
+            self.latest_files.append(src)
+            self._add_file_to_table(src, checked=True)
+            self.populate_add_combo()
+
+    def _add_file_to_table(self, f, checked=False):
+        i = self.table.rowCount()
+        self.table.insertRow(i)
+
+        cb = QCheckBox()
+        cb.setChecked(checked)
+        self.table.setCellWidget(i, 0, cb)
+
+        name = os.path.splitext(os.path.basename(f))[0]
+        item_name = QTableWidgetItem(name)
+        item_name.setData(Qt.UserRole, f)
+        self.table.setItem(i, 1, item_name)
+
+        try:
+            path = derive_poline_path_from_raster(f, _guess_suffix(f))
+            status = "Ready" if os.path.exists(path) else "Missing"
+        except Exception:
+            status = "Skipped"
+        item = QTableWidgetItem(status)
+        if status == "Missing":
+            item.setForeground(QColor(200, 0, 0))
+        self.table.setItem(i, 2, item)
 
     def set_all(self, state):
         for i in range(self.table.rowCount()):
@@ -483,15 +522,12 @@ class LoadPOLinesAlgorithm(QgsProcessingAlgorithm):
             "tuflow_latest_raster_files"
         )
 
-        if not latest_files_str:
-            feedback.reportError(
-                "No TUFLOW raster history found. Please run 'Load Grid Output' first."
-            )
-            return {}
-
         try:
             # Parse the JSON list stored in the global variable
-            latest_files = json.loads(latest_files_str)
+            if latest_files_str:
+                latest_files = json.loads(latest_files_str)
+            else:
+                latest_files = []
         except Exception as e:
             feedback.pushInfo(f"Note: Could not parse history data: {str(e)}")
             latest_files = []

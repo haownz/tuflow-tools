@@ -12,6 +12,7 @@ from qgis.core import (
 )
 from .provider import TuflowProcessingProvider
 from .style_manager import StyleManager
+from .settings import PluginSettings
 import os
 import processing
 
@@ -85,13 +86,19 @@ class TuflowToolsPlugin(QObject):
             "Toggle Labels",
             self.iface.mainWindow(),
         )
+        self.toggle_labels_action.setCheckable(True)
         self.toggle_labels_action.setToolTip("Toggle labels for selected layer")
         self.toggle_labels_action.triggered.connect(self.toggle_selected_layer_labels)
         self.toolbar.addAction(self.toggle_labels_action)
 
-        # Auto-update active layer name variable
+        # Auto-update active layer name variable and label button state
         self.iface.currentLayerChanged.connect(self._update_active_layer_name)
+        self.iface.currentLayerChanged.connect(self._update_label_button_state)
         self._update_active_layer_name(self.iface.activeLayer())
+        self._update_label_button_state(self.iface.activeLayer())
+
+        # Auto-apply style when layers are added
+        QgsProject.instance().layersAdded.connect(self._on_layers_added)
 
         # Register custom expressions
         try:
@@ -119,6 +126,19 @@ class TuflowToolsPlugin(QObject):
             # If the project was clean before, keep it clean (treat this as a transient runtime variable)
             if not was_dirty:
                 project.setDirty(False)
+
+    def _update_label_button_state(self, layer):
+        """Update toggle labels button state based on current layer's label visibility."""
+        if not self.toggle_labels_action:
+            return
+
+        if not layer or layer.type() != Qgis.LayerType.VectorLayer:
+            self.toggle_labels_action.setEnabled(False)
+            self.toggle_labels_action.setChecked(False)
+            return
+
+        self.toggle_labels_action.setEnabled(True)
+        self.toggle_labels_action.setChecked(layer.labelsEnabled())
 
     def apply_style_to_selected(self):
         """Apply style to all currently selected layers."""
@@ -177,10 +197,22 @@ class TuflowToolsPlugin(QObject):
         enabled = not layer.labelsEnabled()
         layer.setLabelsEnabled(enabled)
         layer.triggerRepaint()
+        
+        # Update button state to reflect new label visibility
+        self._update_label_button_state(layer)
+
+    def _on_layers_added(self, layers):
+        """Automatically apply style when layers are added to the project."""
+        if not PluginSettings.get_auto_apply_style():
+            return
+
+        for layer in layers:
+            StyleManager.apply_style_to_layer(layer)
 
     def unload(self):
         try:
             self.iface.currentLayerChanged.disconnect(self._update_active_layer_name)
+            QgsProject.instance().layersAdded.disconnect(self._on_layers_added)
         except Exception:
             pass
 

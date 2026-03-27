@@ -350,8 +350,10 @@ class RastersComparisonAlgorithm(QgsProcessingAlgorithm):
                         layer_type,
                     ) in StyleManager.get_style_mappings():
                         patterns = [p.strip() for p in pattern_str.split(",")]
-                        if layer_type == "raster" and any(
-                            fnmatch.fnmatch(layer_name, p) for p in patterns if p
+                        if (layer_type == "raster" or layer_type == "both") and any(
+                            fnmatch.fnmatch(layer_name.upper(), p.strip().upper())
+                            for p in patterns
+                            if p
                         ):
                             qml_files = [q.strip() for q in qml_file_str.split(",")]
                             style_applied = False

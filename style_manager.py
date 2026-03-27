@@ -28,9 +28,12 @@ class StyleManager:
         is_raster = isinstance(layer, QgsRasterLayer)
         style_path = PluginSettings.get_style_path()
 
-        if not style_path or not os.path.isdir(style_path):
+        if not style_path:
+            return False
+
+        if not os.path.isdir(style_path):
             QgsMessageLog.logMessage(
-                "Style path not configured. Use Plugin Settings to set it.",
+                f"Style path not found: {style_path}. Use Plugin Settings to set it.",
                 "TUFLOW Tools",
                 Qgis.Warning,
             )
@@ -40,8 +43,10 @@ class StyleManager:
         for pattern_str, qml_file_str, layer_type in StyleManager.get_style_mappings():
             patterns = [p.strip() for p in pattern_str.split(",")]
 
-            # Check if any pattern matches the layer name
-            if any(fnmatch.fnmatch(layer_name, p) for p in patterns if p):
+            # Check if any pattern matches the layer name (case-insensitive)
+            if any(
+                fnmatch.fnmatch(layer_name.upper(), p.upper()) for p in patterns if p
+            ):
                 # Check layer type compatibility
                 if layer_type == "vector" and not is_vector:
                     continue
@@ -86,9 +91,4 @@ class StyleManager:
                     )
                     return False
 
-        QgsMessageLog.logMessage(
-            f"No matching style pattern for layer '{layer_name}'",
-            "TUFLOW Tools",
-            Qgis.Info,
-        )
         return False

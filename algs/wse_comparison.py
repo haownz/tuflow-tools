@@ -15,6 +15,11 @@ from qgis.core import (
 )
 from osgeo import gdal
 import numpy as np
+import os
+import shutil
+import fnmatch
+from ..settings import PluginSettings
+from ..style_manager import StyleManager
 
 
 class WSEComparisonAlgorithm(QgsProcessingAlgorithm):
@@ -25,6 +30,8 @@ class WSEComparisonAlgorithm(QgsProcessingAlgorithm):
 
     P_WSE1 = "WSE1"
     P_WSE2 = "WSE2"
+    P_DEPTH = "DEPTH"
+    P_DEPTH_THRESHOLD = "DEPTH_THRESHOLD"
     P_TARGET_CRS = "TARGET_CRS"
     P_TARGET_RES = "TARGET_RESOLUTION"
     P_OUTPUT = "OUTPUT"
@@ -60,6 +67,20 @@ class WSEComparisonAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterRasterLayer(self.P_WSE2, "WSE2 (Comparison Raster)")
         )
         self.addParameter(
+            QgsProcessingParameterRasterLayer(
+                self.P_DEPTH, "Depth Layer (Optional)", optional=True
+            )
+        )
+        self.addParameter(
+            QgsProcessingParameterNumber(
+                self.P_DEPTH_THRESHOLD,
+                "Depth Threshold (m) - applied only if depth layer is provided/detected",
+                type=QgsProcessingParameterNumber.Double,
+                defaultValue=0.05,
+                optional=True,
+            )
+        )
+        self.addParameter(
             QgsProcessingParameterCrs(
                 self.P_TARGET_CRS, "Target CRS", defaultValue="ProjectCrs"
             )
@@ -78,7 +99,7 @@ class WSEComparisonAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
-        # Try to pre-fill WSE1 with the active raster layer
+        # Try to pre-fill WSE1 and Depth with the active raster layer
         try:
             from qgis.utils import iface
 
@@ -87,6 +108,36 @@ class WSEComparisonAlgorithm(QgsProcessingAlgorithm):
                 p_wse1 = self.parameterDefinition(self.P_WSE1)
                 if p_wse1:
                     p_wse1.setDefaultValue(active.id())
+
+                # Auto-detect depth layer based on active layer
+                wse1_name = active.name()
+                import re
+
+                if '_h_' in wse1_name.lower():
+                    depth_name = re.sub(r'(_h_)', '_d_', wse1_name, flags=re.IGNORECASE)
+
+                    project = QgsProject.instance()
+                    depth_layer_found = None
+
+                    # Exact match
+                    layers = project.mapLayersByName(depth_name)
+                    for l in layers:
+                        if isinstance(l, QgsRasterLayer) and l.isValid():
+                            depth_layer_found = l
+                            break
+
+                    # Case-insensitive match
+                    if not depth_layer_found:
+                        for l in project.mapLayers().values():
+                            if isinstance(l, QgsRasterLayer) and l.isValid():
+                                if l.name().lower() == depth_name.lower():
+                                    depth_layer_found = l
+                                    break
+
+                    if depth_layer_found:
+                        p_depth = self.parameterDefinition(self.P_DEPTH)
+                        if p_depth:
+                            p_depth.setDefaultValue(depth_layer_found.id())
         except Exception:
             pass
 
@@ -116,9 +167,52 @@ class WSEComparisonAlgorithm(QgsProcessingAlgorithm):
                 f"Resampling failed for {layer.name()}. Error: {e}"
             )
 
+    def checkParameterValues(self, parameters, context):
+        """
+        Dynamically update the Depth Layer parameter based on WSE1 selection
+        if Depth Layer is currently blank.
+        """
+        wse1_layer = self.parameterAsRasterLayer(parameters, self.P_WSE1, context)
+        depth_layer = self.parameterAsRasterLayer(parameters, self.P_DEPTH, context)
+        
+        # If user hasn't explicitly set a depth layer, try to find one
+        if not depth_layer and wse1_layer:
+            wse1_name = wse1_layer.name()
+            depth_name = None
+            if '_h_' in wse1_name.lower():
+                import re
+                depth_name = re.sub(r'(_h_)', '_d_', wse1_name, flags=re.IGNORECASE)
+            
+            if depth_name:
+                project = context.project() or QgsProject.instance()
+                
+                # First try exact match by name
+                found_layer = None
+                layers = project.mapLayersByName(depth_name)
+                for l in layers:
+                    if isinstance(l, QgsRasterLayer) and l.isValid():
+                        found_layer = l
+                        break
+                
+                # If exact match fails, try a case-insensitive search
+                if not found_layer:
+                    for l in project.mapLayers().values():
+                        if isinstance(l, QgsRasterLayer) and l.isValid():
+                            if l.name().lower() == depth_name.lower():
+                                found_layer = l
+                                break
+                                
+                if found_layer:
+                    # Modify the parameters dictionary so the UI updates
+                    parameters[self.P_DEPTH] = found_layer.id()
+
+        return super().checkParameterValues(parameters, context)
+
     def processAlgorithm(self, parameters, context, feedback):
         wse1_layer = self.parameterAsRasterLayer(parameters, self.P_WSE1, context)
         wse2_layer = self.parameterAsRasterLayer(parameters, self.P_WSE2, context)
+        depth_layer = self.parameterAsRasterLayer(parameters, self.P_DEPTH, context)
+        depth_threshold = self.parameterAsDouble(parameters, self.P_DEPTH_THRESHOLD, context)
         target_crs_param = self.parameterAsCrs(parameters, self.P_TARGET_CRS, context)
         target_res = self.parameterAsDouble(parameters, self.P_TARGET_RES, context)
         out_path = self.parameterAsOutputLayer(parameters, self.P_OUTPUT, context)
@@ -127,6 +221,11 @@ class WSEComparisonAlgorithm(QgsProcessingAlgorithm):
             raise QgsProcessingException("Invalid WSE1 layer.")
         if not wse2_layer or not wse2_layer.isValid():
             raise QgsProcessingException("Invalid WSE2 layer.")
+
+        if depth_layer:
+            feedback.pushInfo(f"Using Depth Layer: {depth_layer.name()} with threshold {depth_threshold}m")
+        else:
+            feedback.pushInfo("No Depth Layer provided or detected. Depth threshold will not be applied.")
 
         # Determine target CRS
         if not target_crs_param.isValid():
@@ -190,6 +289,13 @@ class WSEComparisonAlgorithm(QgsProcessingAlgorithm):
             wse2_layer, target_crs_wkt, target_res, feedback, combined_bounds
         )
 
+        ds_depth = None
+        if depth_layer:
+            feedback.pushInfo("Warping Depth Layer...")
+            ds_depth = self._warp_raster(
+                depth_layer, target_crs_wkt, target_res, feedback, combined_bounds
+            )
+
         # Read arrays
         band1 = ds1.GetRasterBand(1)
         nd1 = band1.GetNoDataValue()
@@ -198,6 +304,17 @@ class WSEComparisonAlgorithm(QgsProcessingAlgorithm):
         band2 = ds2.GetRasterBand(1)
         nd2 = band2.GetNoDataValue()
         arr2 = band2.ReadAsArray().astype(np.float32)
+
+        arr_depth = None
+        nd_depth = None
+        if ds_depth:
+            band_depth = ds_depth.GetRasterBand(1)
+            nd_depth = band_depth.GetNoDataValue()
+            arr_depth = band_depth.ReadAsArray().astype(np.float32)
+            if arr_depth.shape != arr1.shape:
+                raise QgsProcessingException(
+                    f"Resampling produced different grid sizes for Depth: {arr_depth.shape} vs WSE1 {arr1.shape}"
+                )
 
         if arr1.shape != arr2.shape:
             raise QgsProcessingException(
@@ -220,6 +337,12 @@ class WSEComparisonAlgorithm(QgsProcessingAlgorithm):
         out_arr[both_wet] = arr1[both_wet] - arr2[both_wet]
         out_arr[was_wet_now_dry] = -9999.0
         out_arr[was_dry_now_wet] = 9999.0
+
+        if arr_depth is not None:
+            # Mask out cells where depth < threshold
+            valid_depth_pixels = (arr_depth != nd_depth) if nd_depth is not None else ~np.isnan(arr_depth)
+            shallow_pixels = valid_depth_pixels & (arr_depth < depth_threshold)
+            out_arr[shallow_pixels] = -99999.0
 
         # Save result
         if not out_path or out_path == QgsProcessing.TEMPORARY_OUTPUT:
@@ -249,9 +372,44 @@ class WSEComparisonAlgorithm(QgsProcessingAlgorithm):
 
         # Add to project with specific name to trigger style
         try:
+            layer_name = "WSE_DIFF"
             project = context.project() or QgsProject.instance()
-            details = QgsProcessingContext.LayerDetails("WSE_DIFF", project)
+            details = QgsProcessingContext.LayerDetails(layer_name, project)
             context.addLayerToLoadOnCompletion(out_path, details)
+
+            # Apply style via style_manager if available
+            try:
+                style_path = PluginSettings.get_style_path()
+                if style_path and os.path.isdir(style_path):
+                    for (
+                        pattern_str,
+                        qml_file_str,
+                        layer_type,
+                    ) in StyleManager.get_style_mappings():
+                        patterns = [p.strip() for p in pattern_str.split(",")]
+                        if (layer_type == "raster" or layer_type == "both") and any(
+                            fnmatch.fnmatch(layer_name.upper(), p.strip().upper())
+                            for p in patterns
+                            if p
+                        ):
+                            qml_files = [q.strip() for q in qml_file_str.split(",")]
+                            style_applied = False
+                            for qml_file in qml_files:
+                                if not qml_file:
+                                    continue
+                                src_qml = os.path.join(style_path, qml_file)
+                                if os.path.exists(src_qml):
+                                    dst_qml = os.path.splitext(out_path)[0] + ".qml"
+                                    shutil.copy2(src_qml, dst_qml)
+                                    feedback.pushInfo(f"Applied style: {qml_file}")
+                                    style_applied = True
+                                    break
+
+                            if style_applied:
+                                break
+            except Exception as se:
+                feedback.reportError(f"Could not apply style: {se}")
+
         except Exception as e:
             feedback.reportError(f"Could not register layer for loading: {e}")
 

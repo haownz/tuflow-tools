@@ -12,6 +12,7 @@ from qgis.PyQt.QtWidgets import (
     QComboBox,
     QHeaderView,
     QAbstractItemView,
+    QCheckBox,
 )
 from qgis.core import QgsProcessingAlgorithm
 from ..settings import PluginSettings
@@ -119,6 +120,10 @@ class PluginSettingsDialog(QDialog):
 
         widget = QWidget()
         layout = QVBoxLayout()
+
+        # Add auto apply style checkbox
+        self.auto_apply_style_cb = QCheckBox("Auto-Apply Style when layer is added")
+        layout.addWidget(self.auto_apply_style_cb)
 
         layout.addWidget(
             QLabel("Style Mappings (comma-separated supported, top item has priority):")
@@ -245,8 +250,14 @@ class PluginSettingsDialog(QDialog):
             combo.setCurrentText(layer_type)
             self.style_table.setCellWidget(row, 2, combo)
 
+        # Auto-apply style
+        self.auto_apply_style_cb.setChecked(PluginSettings.get_auto_apply_style())
+
     def save_settings(self):
-        # Save path mappings
+        # Style path and auto apply style
+        PluginSettings.set_auto_apply_style(self.auto_apply_style_cb.isChecked())
+
+        # Path mappings
         path_mappings = []
         for row in range(self.path_table.rowCount()):
             name_item = self.path_table.item(row, 0)

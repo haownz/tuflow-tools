@@ -1,33 +1,12 @@
+.github/
+
 # Python
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
-*.egg
-*.egg-info/
-dist/
-build/
-.eggs/
+*.class
 
-# QGIS
-*.qgd
-*.qgs~
-*.bak
-
-# IDE
+# VS Code
 .vscode/
-.idea/
-*.swp
-*.swo
 
-# OS
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# Temp
-*.log
-*.tmp
-.ruff_cache/
-ruff_errors.json
-ruff_errors.txt
+# Linting logs
+ruff_errors.*

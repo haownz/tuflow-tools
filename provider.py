@@ -28,6 +28,7 @@ from .algs.lc_add_fields import LandCoverAddFieldsAlgorithm
 from .algs.inundation_boundary import InundationBoundaryAlgorithm
 from .algs.rasters_comparison import RastersComparisonAlgorithm
 from .algs.depth_discharge_curve import DepthDischargeCurveAlgorithm
+from .algs.merge_rasters import MergeRastersAlgorithm
 
 
 class TuflowProcessingProvider(QgsProcessingProvider):
@@ -89,3 +90,4 @@ class TuflowProcessingProvider(QgsProcessingProvider):
         )  # Trace flooded footprints from depths
         self.addAlgorithm(RastersComparisonAlgorithm())  # compare generic rasters
         self.addAlgorithm(DepthDischargeCurveAlgorithm())  # build a composite Q-H curve
+        self.addAlgorithm(MergeRastersAlgorithm())  # merge multiple rasters into a VRT
