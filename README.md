@@ -115,6 +115,17 @@ Or search for any tool by name in the Processing Toolbox search bar.
 
 ## 📋 Changelog
 
+### Version 1.4.0 (2026-03-27)
+#### New Features
+- **Depth Discharge Curve**: Build composite Q–H curves with interactive plotting and CSV export. Includes support for multiple QML fallbacks.
+- **Time of Concentration**: Added Time of Concentration algorithm with multi-layer DEM support.
+- **Merge Rasters**: Added a new tool to efficiently merge multiple raster files.
+
+#### Improvements
+- **Code Quality**: Comprehensive code formatting and linting improvements using the Ruff formatter.
+- **Privacy & Security**: Removed sensitive metadata and implemented stricter workspace ignoring.
+- **Workspace Cleanup**: Tidied up development artifacts and documentation.
+
 ### Version 1.3.6 (2026-01-28)
 #### New Features
 - **Cross Sections along Alignment**
