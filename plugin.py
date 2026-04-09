@@ -31,6 +31,8 @@ class TuflowToolsPlugin(QObject):
         self.rename_action = None
         self.restore_layer_name_action = None
         self.toggle_labels_action = None
+        self.duplicate_layer_action = None
+        self.collapse_action = None
 
     def initGui(self):
         self.provider = TuflowProcessingProvider()
@@ -90,6 +92,28 @@ class TuflowToolsPlugin(QObject):
         self.toggle_labels_action.setToolTip("Toggle labels for selected layer")
         self.toggle_labels_action.triggered.connect(self.toggle_selected_layer_labels)
         self.toolbar.addAction(self.toggle_labels_action)
+
+        # Add Duplicate Layer button
+        self.duplicate_layer_action = QAction(
+            QgsApplication.getThemeIcon("/mActionDuplicateLayer.svg"),
+            "Duplicate Layer Data",
+            self.iface.mainWindow(),
+        )
+        self.duplicate_layer_action.setToolTip(
+            "Duplicate source data of selected vector layer"
+        )
+        self.duplicate_layer_action.triggered.connect(self.duplicate_vector_layer)
+        self.toolbar.addAction(self.duplicate_layer_action)
+
+        # Add Collapse All Sub-layers button
+        self.collapse_action = QAction(
+            QgsApplication.getThemeIcon("/mActionArrowDown.svg"),
+            "Collapse All Sub-layers",
+            self.iface.mainWindow(),
+        )
+        self.collapse_action.setToolTip("Collapse all sub-layers and sub-groups")
+        self.collapse_action.triggered.connect(self.collapse_all_sub_items)
+        self.toolbar.addAction(self.collapse_action)
 
         # Auto-update active layer name variable and label button state
         self.iface.currentLayerChanged.connect(self._update_active_layer_name)
@@ -197,9 +221,248 @@ class TuflowToolsPlugin(QObject):
         enabled = not layer.labelsEnabled()
         layer.setLabelsEnabled(enabled)
         layer.triggerRepaint()
-        
+
         # Update button state to reflect new label visibility
         self._update_label_button_state(layer)
+
+    def duplicate_vector_layer(self):
+        """Duplicate the active vector layer's data source and load it."""
+        from qgis.PyQt.QtWidgets import QInputDialog, QMessageBox
+        from qgis.core import QgsVectorFileWriter, QgsProject, QgsVectorLayer, Qgis
+
+        layer = self.iface.activeLayer()
+        if not layer or layer.type() != Qgis.LayerType.VectorLayer:
+            self.iface.messageBar().pushMessage(
+                "Duplicate Layer", "Please select a vector layer.", Qgis.Warning, 4
+            )
+            return
+
+        provider = layer.dataProvider()
+        if not provider or provider.name() != "ogr":
+            self.iface.messageBar().pushMessage(
+                "Duplicate Layer",
+                "Only OGR vector layers are supported.",
+                Qgis.Warning,
+                4,
+            )
+            return
+
+        # Extract source path (handle QGIS OGR source string which may contain pipe)
+        source_parts = layer.source().split("|")
+        file_path = source_parts[0].strip()
+
+        if not os.path.exists(file_path):
+            self.iface.messageBar().pushMessage(
+                "Duplicate Layer",
+                "Source file does not exist or is not a local file.",
+                Qgis.Warning,
+                4,
+            )
+            return
+
+        ext = os.path.splitext(file_path)[1].lower()
+
+        if ext == ".gpkg":
+            # Prompt for new table name
+            new_name, ok = QInputDialog.getText(
+                self.iface.mainWindow(),
+                "Duplicate Layer Data",
+                "Enter new table name for GeoPackage:",
+                text=f"{layer.name()}_copy",
+            )
+            if not ok or not new_name.strip():
+                return
+
+            new_name = new_name.strip()
+
+            # To avoid slow performance on NAS due to SQLite concurrent read/write locks,
+            # we first export to a temporary local file, then append it to the target gpkg.
+            import tempfile
+
+            temp_dir = tempfile.mkdtemp()
+            temp_file = os.path.join(temp_dir, "temp_duplicate.gpkg")
+
+            temp_options = QgsVectorFileWriter.SaveVectorOptions()
+            temp_options.driverName = "GPKG"
+            temp_options.layerName = new_name
+            context = QgsProject.instance().transformContext()
+
+            res_temp = QgsVectorFileWriter.writeAsVectorFormatV3(
+                layer, temp_file, context, temp_options
+            )
+
+            if res_temp[0] == QgsVectorFileWriter.NoError:
+                temp_layer = QgsVectorLayer(
+                    f"{temp_file}|layername={new_name}", "temp", "ogr"
+                )
+
+                options = QgsVectorFileWriter.SaveVectorOptions()
+                options.driverName = "GPKG"
+                options.layerName = new_name
+                options.actionOnExistingFile = (
+                    QgsVectorFileWriter.CreateOrOverwriteLayer
+                )
+
+                res = QgsVectorFileWriter.writeAsVectorFormatV3(
+                    temp_layer, file_path, context, options
+                )
+
+                # Clean up temp layer
+                temp_layer = None
+                try:
+                    import shutil
+
+                    shutil.rmtree(temp_dir)
+                except Exception:
+                    pass
+            else:
+                res = res_temp
+
+            if res[0] == QgsVectorFileWriter.NoError:
+                uri = f"{file_path}|layername={new_name}"
+                new_layer = QgsVectorLayer(uri, new_name, "ogr")
+                if new_layer.isValid():
+                    QgsProject.instance().addMapLayer(new_layer)
+                    self.iface.messageBar().pushMessage(
+                        "Duplicate Layer",
+                        f"Successfully duplicated to table '{new_name}'.",
+                        Qgis.Success,
+                        4,
+                    )
+                else:
+                    self.iface.messageBar().pushMessage(
+                        "Duplicate Layer",
+                        "Failed to load the new layer.",
+                        Qgis.Critical,
+                        4,
+                    )
+            else:
+                self.iface.messageBar().pushMessage(
+                    "Duplicate Layer",
+                    f"Error saving layer: {res[1] if len(res) > 1 else 'Unknown'}",
+                    Qgis.Critical,
+                    4,
+                )
+
+        else:
+            # Prompt for new file name
+            base_dir = os.path.dirname(file_path)
+            base_name = os.path.basename(file_path)
+            name_only, current_ext = os.path.splitext(base_name)
+
+            new_name, ok = QInputDialog.getText(
+                self.iface.mainWindow(),
+                "Duplicate Layer Data",
+                f"Enter new file name (without {current_ext} extension):",
+                text=f"{name_only}_copy",
+            )
+
+            if not ok or not new_name.strip():
+                return
+
+            new_name = new_name.strip()
+            new_file_path = os.path.join(base_dir, f"{new_name}{current_ext}")
+
+            if os.path.exists(new_file_path):
+                ans = QMessageBox.question(
+                    self.iface.mainWindow(),
+                    "File Exists",
+                    f"The file {new_name}{current_ext} already exists. Overwrite?",
+                    QMessageBox.Yes | QMessageBox.No,
+                )
+                if ans == QMessageBox.No:
+                    return
+
+            options = QgsVectorFileWriter.SaveVectorOptions()
+            if hasattr(layer.dataProvider(), "encoding"):
+                options.fileEncoding = layer.dataProvider().encoding()
+
+            context = QgsProject.instance().transformContext()
+            res = QgsVectorFileWriter.writeAsVectorFormatV3(
+                layer, new_file_path, context, options
+            )
+
+            if res[0] == QgsVectorFileWriter.NoError:
+                new_layer = QgsVectorLayer(new_file_path, new_name, "ogr")
+                if new_layer.isValid():
+                    QgsProject.instance().addMapLayer(new_layer)
+                    self.iface.messageBar().pushMessage(
+                        "Duplicate Layer",
+                        f"Successfully duplicated to '{new_name}'.",
+                        Qgis.Success,
+                        4,
+                    )
+                else:
+                    self.iface.messageBar().pushMessage(
+                        "Duplicate Layer",
+                        "Failed to load the new layer.",
+                        Qgis.Critical,
+                        4,
+                    )
+            else:
+                self.iface.messageBar().pushMessage(
+                    "Duplicate Layer",
+                    f"Error saving layer: {res[1] if len(res) > 1 else 'Unknown'}",
+                    Qgis.Critical,
+                    4,
+                )
+
+    def collapse_all_sub_items(self):
+        """Collapse all sub-layers and sub-groups of the selected item in the Layers panel."""
+        from qgis.core import QgsLayerTreeGroup
+
+        layer_tree_view = self.iface.layerTreeView()
+        current_node = layer_tree_view.currentNode()
+
+        if not current_node:
+            self.iface.messageBar().pushMessage(
+                "Collapse All Sub-layers",
+                "No item selected in Layers panel",
+                Qgis.Info,
+                2,
+            )
+            return
+
+        if not isinstance(current_node, QgsLayerTreeGroup):
+            self.iface.messageBar().pushMessage(
+                "Collapse All Sub-layers",
+                "Selected item is not a group",
+                Qgis.Warning,
+                2,
+            )
+            return
+
+        # Collapse all children
+        count = self._collapse_children(current_node, layer_tree_view)
+
+        self.iface.messageBar().pushMessage(
+            "Collapse All Sub-layers",
+            f"Collapsed {count} sub-group(s)",
+            Qgis.Success,
+            2,
+        )
+
+    def _collapse_children(self, node, layer_tree_view):
+        """Recursively collapse all children and return count of collapsed items."""
+        from qgis.core import QgsLayerTreeGroup
+
+        count = 0
+        if isinstance(node, QgsLayerTreeGroup):
+            for child in node.children():
+                # Try to collapse any child (group or layer)
+                try:
+                    model_index = layer_tree_view.node2index(child)
+                    if model_index.isValid():
+                        layer_tree_view.collapse(model_index)
+                        count += 1
+                except Exception:
+                    pass
+
+                # Recursively collapse nested children
+                if isinstance(child, QgsLayerTreeGroup):
+                    count += self._collapse_children(child, layer_tree_view)
+
+        return count
 
     def _on_layers_added(self, layers):
         """Automatically apply style when layers are added to the project."""

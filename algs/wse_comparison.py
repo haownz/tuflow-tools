@@ -113,25 +113,25 @@ class WSEComparisonAlgorithm(QgsProcessingAlgorithm):
                 wse1_name = active.name()
                 import re
 
-                if '_h_' in wse1_name.lower():
-                    depth_name = re.sub(r'(_h_)', '_d_', wse1_name, flags=re.IGNORECASE)
+                if "_h_" in wse1_name.lower():
+                    depth_name = re.sub(r"(_h_)", "_d_", wse1_name, flags=re.IGNORECASE)
 
                     project = QgsProject.instance()
                     depth_layer_found = None
 
                     # Exact match
                     layers = project.mapLayersByName(depth_name)
-                    for l in layers:
-                        if isinstance(l, QgsRasterLayer) and l.isValid():
-                            depth_layer_found = l
+                    for lyr in layers:
+                        if isinstance(lyr, QgsRasterLayer) and lyr.isValid():
+                            depth_layer_found = lyr
                             break
 
                     # Case-insensitive match
                     if not depth_layer_found:
-                        for l in project.mapLayers().values():
-                            if isinstance(l, QgsRasterLayer) and l.isValid():
-                                if l.name().lower() == depth_name.lower():
-                                    depth_layer_found = l
+                        for lyr in project.mapLayers().values():
+                            if isinstance(lyr, QgsRasterLayer) and lyr.isValid():
+                                if lyr.name().lower() == depth_name.lower():
+                                    depth_layer_found = lyr
                                     break
 
                     if depth_layer_found:
@@ -169,50 +169,17 @@ class WSEComparisonAlgorithm(QgsProcessingAlgorithm):
 
     def checkParameterValues(self, parameters, context):
         """
-        Dynamically update the Depth Layer parameter based on WSE1 selection
-        if Depth Layer is currently blank.
+        Basic parameter validation.
         """
-        wse1_layer = self.parameterAsRasterLayer(parameters, self.P_WSE1, context)
-        depth_layer = self.parameterAsRasterLayer(parameters, self.P_DEPTH, context)
-        
-        # If user hasn't explicitly set a depth layer, try to find one
-        if not depth_layer and wse1_layer:
-            wse1_name = wse1_layer.name()
-            depth_name = None
-            if '_h_' in wse1_name.lower():
-                import re
-                depth_name = re.sub(r'(_h_)', '_d_', wse1_name, flags=re.IGNORECASE)
-            
-            if depth_name:
-                project = context.project() or QgsProject.instance()
-                
-                # First try exact match by name
-                found_layer = None
-                layers = project.mapLayersByName(depth_name)
-                for l in layers:
-                    if isinstance(l, QgsRasterLayer) and l.isValid():
-                        found_layer = l
-                        break
-                
-                # If exact match fails, try a case-insensitive search
-                if not found_layer:
-                    for l in project.mapLayers().values():
-                        if isinstance(l, QgsRasterLayer) and l.isValid():
-                            if l.name().lower() == depth_name.lower():
-                                found_layer = l
-                                break
-                                
-                if found_layer:
-                    # Modify the parameters dictionary so the UI updates
-                    parameters[self.P_DEPTH] = found_layer.id()
-
         return super().checkParameterValues(parameters, context)
 
     def processAlgorithm(self, parameters, context, feedback):
         wse1_layer = self.parameterAsRasterLayer(parameters, self.P_WSE1, context)
         wse2_layer = self.parameterAsRasterLayer(parameters, self.P_WSE2, context)
         depth_layer = self.parameterAsRasterLayer(parameters, self.P_DEPTH, context)
-        depth_threshold = self.parameterAsDouble(parameters, self.P_DEPTH_THRESHOLD, context)
+        depth_threshold = self.parameterAsDouble(
+            parameters, self.P_DEPTH_THRESHOLD, context
+        )
         target_crs_param = self.parameterAsCrs(parameters, self.P_TARGET_CRS, context)
         target_res = self.parameterAsDouble(parameters, self.P_TARGET_RES, context)
         out_path = self.parameterAsOutputLayer(parameters, self.P_OUTPUT, context)
@@ -223,9 +190,13 @@ class WSEComparisonAlgorithm(QgsProcessingAlgorithm):
             raise QgsProcessingException("Invalid WSE2 layer.")
 
         if depth_layer:
-            feedback.pushInfo(f"Using Depth Layer: {depth_layer.name()} with threshold {depth_threshold}m")
+            feedback.pushInfo(
+                f"Using Depth Layer: {depth_layer.name()} with threshold {depth_threshold}m"
+            )
         else:
-            feedback.pushInfo("No Depth Layer provided or detected. Depth threshold will not be applied.")
+            feedback.pushInfo(
+                "No Depth Layer provided or detected. Depth threshold will not be applied."
+            )
 
         # Determine target CRS
         if not target_crs_param.isValid():
@@ -340,7 +311,11 @@ class WSEComparisonAlgorithm(QgsProcessingAlgorithm):
 
         if arr_depth is not None:
             # Mask out cells where depth < threshold
-            valid_depth_pixels = (arr_depth != nd_depth) if nd_depth is not None else ~np.isnan(arr_depth)
+            valid_depth_pixels = (
+                (arr_depth != nd_depth)
+                if nd_depth is not None
+                else ~np.isnan(arr_depth)
+            )
             shallow_pixels = valid_depth_pixels & (arr_depth < depth_threshold)
             out_arr[shallow_pixels] = -99999.0
 

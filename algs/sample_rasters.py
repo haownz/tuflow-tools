@@ -383,6 +383,8 @@ class SampleRastersAlgorithm(QgsProcessingAlgorithm):
             v = float(val)
             if math.isnan(v):
                 return False
+            if v >= 9999 or v <= -9999:
+                return False
             if self._is_nodata(provider, band, v):
                 return False
             return True

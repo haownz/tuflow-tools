@@ -60,10 +60,10 @@ class RenameLayersByPattern(QgsProcessingAlgorithm):
         return self.tr("Batch Rename Layers")
 
     def group(self):
-        return "General Tools"
+        return "3 - Utilities"
 
     def groupId(self):
-        return "general_tools"
+        return "utilities"
 
     def shortHelpString(self):
         return self.tr(

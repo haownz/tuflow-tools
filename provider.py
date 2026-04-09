@@ -29,6 +29,10 @@ from .algs.inundation_boundary import InundationBoundaryAlgorithm
 from .algs.rasters_comparison import RastersComparisonAlgorithm
 from .algs.depth_discharge_curve import DepthDischargeCurveAlgorithm
 from .algs.merge_rasters import MergeRastersAlgorithm
+from .algs.mapping_csv_to_legend import MappingCSVToLegendAlgorithm
+from .algs.xmdf_output import XmdfOutputAlgorithm
+from .algs.batch_theme_export import BatchThemeExportAlgorithm
+from .algs.sample_rasters_grid import SampleRastersGridAlgorithm
 
 
 class TuflowProcessingProvider(QgsProcessingProvider):
@@ -91,3 +95,11 @@ class TuflowProcessingProvider(QgsProcessingProvider):
         self.addAlgorithm(RastersComparisonAlgorithm())  # compare generic rasters
         self.addAlgorithm(DepthDischargeCurveAlgorithm())  # build a composite Q-H curve
         self.addAlgorithm(MergeRastersAlgorithm())  # merge multiple rasters into a VRT
+        self.addAlgorithm(
+            MappingCSVToLegendAlgorithm()
+        )  # map CSV data to vector layer legend
+        self.addAlgorithm(XmdfOutputAlgorithm())  # export XMDF mesh dataset to GeoTIFF
+        self.addAlgorithm(
+            BatchThemeExportAlgorithm()
+        )  # batch export layout to pdf with themes
+        self.addAlgorithm(SampleRastersGridAlgorithm())  # sample rasters at grid points

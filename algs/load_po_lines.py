@@ -386,6 +386,7 @@ class PreviewDialog(QDialog):
 
         # Add Layer Section
         from qgis.PyQt.QtWidgets import QComboBox
+
         add_lyt = QHBoxLayout()
         self.add_combo = QComboBox()
         btn_add = QPushButton("Add to List")

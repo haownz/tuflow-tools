@@ -1,23 +1,22 @@
 # -*- coding: utf-8 -*-
 """
-TUFLOW tools — Flow (Q) Plot Viewer (Auto multi-selection across layers + peaks toggle + pan/zoom)
+TUFLOW tools — Flow (Q) Plot Viewer (Enhanced multi-layer support)
 
-- Auto-detect selected features across ALL vector layers (no layer-selection panel).
-- Multiple PO lines present = overlay in same plot.
-- Peak flow annotation toggle ("Show Peaks") with same auto-logic as "Show Volume":
-    * If TOTAL series == 1 -> both toggles enabled + ON
-    * If TOTAL series > 1  -> both toggles disabled + OFF
-- Legend rules:
-    * If TOTAL series == 1 -> legend shows ID only
-    * If TOTAL series > 1  -> legend shows "Layer Name • ID"
-- Legend font smaller to avoid overlap.
-- Bottom info shows TOTAL VOLUME for every series.
-- Interactive pan/zoom via Matplotlib NavigationToolbar2QT.
+IMPROVEMENTS:
+- Layer Management Table: Select which vector layers (PO Lines) to include in the plot
+- Auto-detect selected features across enabled vector layers
+- Multiple PO lines overlay in same plot with distinct colors
+- Peak flow annotation toggle ("Show Peaks") and Volume toggle ("Show Volume")
+- Legend displays "Layer Name • ID" for clarity across multiple layers
+- Interactive pan/zoom via Matplotlib NavigationToolbar2QT
 
-Other retained features:
-- Exact, full-string ID matching for 'Q <ID>' (NO numeric coercion, NO prefix/fuzzy matching).
-- Robust CSV discovery for each layer (2D and optional 1D).
-- Peak markers/annotations (conditionally), tight axes, stable lifetime via _LIVE_WINDOWS.
+FEATURES:
+- Exact, full-string ID matching for 'Q <ID>' (NO numeric coercion, NO prefix/fuzzy matching)
+- Robust CSV discovery for each layer (2D and optional 1D)
+- Auto-toggle behavior: single series enables both toggles; multi-series disables them
+- Bottom info shows peak flow and total volume for every series
+- Layer table updates automatically when layers are added/removed
+- Reference to cross sections along alignment (via PO Line IDs)
 
 Author: Hao Wu
 """
@@ -36,8 +35,14 @@ from qgis.PyQt.QtWidgets import (
     QLabel,
     QCheckBox,
     QWidget,
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
+    QPushButton,
+    QAbstractItemView,
+    QMessageBox,
 )
-from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtCore import Qt, QSettings
 
 from qgis.core import QgsMapLayer, QgsProject
 from qgis.utils import iface
@@ -86,7 +91,7 @@ class TimeSeriesPlotWindow(QDialog):
     ):
         super().__init__(parent)
         self.setWindowTitle("TUFLOW tools — Flow (Q) Plot Viewer")
-        self.resize(1200, 640)
+        self.resize(1200, 900)  # Increased height for better space
 
         # Inputs (initial)
         self.layer: Optional[QgsMapLayer] = layer
@@ -116,17 +121,46 @@ class TimeSeriesPlotWindow(QDialog):
         self._chk_peak.setChecked(True)
         self._chk_peak.stateChanged.connect(self._on_toggle_changed)
 
-        # When enabled, use a single selected feature ID (from any layer) to search across
-        # all currently selected vector layers and plot matching IDs from each layer.
-        self._chk_match_single: QCheckBox = QCheckBox("Match single ID")
-        self._chk_match_single.setChecked(True)
-        self._chk_match_single.stateChanged.connect(self._on_toggle_changed)
-
         # ----- Bottom info label -----
         self._hint = QLabel(
             "Select features (with exact ID strings) in one or more vector layers."
         )
         self._hint.setWordWrap(True)
+
+        # ----- Layer management table -----
+        self._layer_table = QTableWidget(0, 5)
+        self._layer_table.setHorizontalHeaderLabels(
+            ["Include", "Vector Layer (PO Lines)", "First ID", "Qp (m³/s)", "V (m³)"]
+        )
+        self._layer_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
+        self._layer_table.setColumnWidth(0, 60)
+        self._layer_table.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.Stretch
+        )
+        self._layer_table.horizontalHeader().setSectionResizeMode(
+            2, QHeaderView.ResizeToContents
+        )
+        self._layer_table.horizontalHeader().setSectionResizeMode(
+            3, QHeaderView.ResizeToContents
+        )
+        self._layer_table.horizontalHeader().setSectionResizeMode(
+            4, QHeaderView.ResizeToContents
+        )
+        self._layer_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self._layer_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self._layer_table.setMaximumHeight(150)  # Fixed height for layer list
+
+        # Buttons for layer management
+        btn_add = QPushButton("Add Selected")
+        btn_add.clicked.connect(self._on_add_layer)
+
+        btn_remove = QPushButton("Remove")
+        btn_remove.clicked.connect(self._on_remove_layer)
+
+        btn_layout = QHBoxLayout()
+        btn_layout.addWidget(btn_add)
+        btn_layout.addWidget(btn_remove)
+        btn_layout.addStretch()
 
         # Layout (no layer panel)
         right = QWidget()
@@ -135,13 +169,17 @@ class TimeSeriesPlotWindow(QDialog):
         ctrl = QHBoxLayout()
         ctrl.addWidget(self._chk_volume)
         ctrl.addWidget(self._chk_peak)
-        ctrl.addWidget(self._chk_match_single)
         ctrl.addStretch(1)
 
         right_lay.addLayout(ctrl)
         right_lay.addWidget(self._toolbar)  # interactive toolbar
-        right_lay.addWidget(self._canvas)
+        right_lay.addWidget(self._canvas, stretch=1)  # Give canvas stretch factor
+        right_lay.addWidget(QLabel("PO Lines / Vector Layers:"))  # Section label
+        right_lay.addLayout(btn_layout)  # Add/Remove buttons
+        right_lay.addWidget(self._layer_table)  # Layer management table
         right_lay.addWidget(self._hint)
+        # Bottom stretch to push everything to top
+        right_lay.addStretch()
         right.setLayout(right_lay)
 
         main_lay = QVBoxLayout()
@@ -164,8 +202,17 @@ class TimeSeriesPlotWindow(QDialog):
         # Sources cache per layer: {layer_id: [ {path, time, headers}, ... ] }
         self._layer_sources: Dict[str, List[Dict[str, object]]] = {}
 
+        # Track which layers are enabled/included in the plot
+        self._layer_enabled: Dict[str, bool] = {}
+
+        # Store layer metrics: {layer_id: {first_id, peak_q, total_vol_m3}}
+        self._layer_metrics: Dict[str, Dict[str, object]] = {}
+
         # Last plot payloads (one dict per series) for redraw
         self._last_plot_payloads: List[Dict[str, object]] = []
+
+        # Load saved settings
+        self._load_settings()
 
         # Prepare initial sources
         self._prepare_sources_initial()
@@ -283,6 +330,151 @@ class TimeSeriesPlotWindow(QDialog):
         except Exception:
             QtCore.QTimer.singleShot(0, self._refresh_plot)
 
+    # --------------------- LAYER TABLE MANAGEMENT ---------------------
+    def _on_add_layer(self):
+        """
+        Add selected vector layers from the Layers panel to the plot.
+        """
+        layers = iface.layerTreeView().selectedLayers()
+        added = False
+
+        for layer in layers:
+            if layer.type() == layer.VectorLayer and layer.isValid():
+                if layer.id() not in self._layer_enabled:
+                    self._layer_enabled[layer.id()] = True
+                    added = True
+
+        if added:
+            self._refresh_layer_table()
+            # Trigger refresh
+            try:
+                self._refresh_timer.start()
+            except Exception:
+                QtCore.QTimer.singleShot(0, self._refresh_plot)
+        else:
+            QMessageBox.warning(
+                self,
+                "Add Layer",
+                "Please select valid vector layer(s) in the Layers panel.",
+            )
+
+    def _on_remove_layer(self):
+        """
+        Remove the selected layer from the table.
+        """
+        row = self._layer_table.currentRow()
+        if row >= 0:
+            # Get layer ID from table and remove
+            layer_item = self._layer_table.item(row, 1)
+            if layer_item:
+                layer_id = layer_item.data(QtCore.Qt.UserRole)
+                if layer_id in self._layer_enabled:
+                    del self._layer_enabled[layer_id]
+                self._refresh_layer_table()
+                # Trigger refresh
+                try:
+                    self._refresh_timer.start()
+                except Exception:
+                    QtCore.QTimer.singleShot(0, self._refresh_plot)
+            # Trigger refresh
+            try:
+                self._refresh_timer.start()
+            except Exception:
+                QtCore.QTimer.singleShot(0, self._refresh_plot)
+
+    def _refresh_layer_table(self):
+        """
+        Refresh the layer management table to show currently selected layers with checkboxes and metrics.
+        """
+        self._layer_table.blockSignals(True)
+        self._layer_table.setRowCount(0)
+
+        for row, layer_id in enumerate(self._layer_enabled.keys()):
+            layer = QgsProject.instance().mapLayer(layer_id)
+            if layer and layer.type() == layer.VectorLayer:
+                # Checkbox column
+                chk = QCheckBox()
+                chk.setChecked(self._layer_enabled[layer_id])
+                chk.layer_id = layer_id
+                chk.stateChanged.connect(self._on_layer_checkbox_changed)
+
+                self._layer_table.insertRow(row)
+                self._layer_table.setCellWidget(row, 0, chk)
+
+                # Layer name column
+                item = QTableWidgetItem(layer.name())
+                item.setData(QtCore.Qt.UserRole, layer_id)
+                self._layer_table.setItem(row, 1, item)
+
+                # Get metrics for this layer
+                metrics = self._layer_metrics.get(layer_id, {})
+                first_id = metrics.get("first_id", "-")
+                peak_q = metrics.get("peak_q", "-")
+                total_vol = metrics.get("total_vol_m3", "-")
+
+                # First ID column
+                id_item = QTableWidgetItem(str(first_id))
+                id_item.setFlags(id_item.flags() & ~Qt.ItemIsEditable)
+                self._layer_table.setItem(row, 2, id_item)
+
+                # Qp column
+                if isinstance(peak_q, (int, float)):
+                    qp_text = f"{peak_q:.3f}"
+                else:
+                    qp_text = str(peak_q)
+                qp_item = QTableWidgetItem(qp_text)
+                qp_item.setFlags(qp_item.flags() & ~Qt.ItemIsEditable)
+                self._layer_table.setItem(row, 3, qp_item)
+
+                # V column
+                if isinstance(total_vol, (int, float)):
+                    v_text = f"{total_vol:,.0f}"
+                else:
+                    v_text = str(total_vol)
+                v_item = QTableWidgetItem(v_text)
+                v_item.setFlags(v_item.flags() & ~Qt.ItemIsEditable)
+                self._layer_table.setItem(row, 4, v_item)
+
+        self._layer_table.blockSignals(False)
+
+    def _on_layer_checkbox_changed(self, state):
+        """
+        Handle layer checkbox changes and trigger a refresh.
+        """
+        sender = self.sender()
+        if hasattr(sender, "layer_id"):
+            layer_id = sender.layer_id
+            self._layer_enabled[layer_id] = sender.isChecked()
+            # Trigger refresh
+            try:
+                self._refresh_timer.start()
+            except Exception:
+                QtCore.QTimer.singleShot(0, self._refresh_plot)
+
+    # --------------------- SETTINGS PERSISTENCE ---------------------
+    def _load_settings(self):
+        """
+        Load saved UI settings (Show Volume, Show Peaks toggle states).
+        """
+        settings = QSettings("QGIS", "TUFLOW_Tools")
+        show_volume = settings.value("qplot/show_volume", True, type=bool)
+        show_peaks = settings.value("qplot/show_peaks", True, type=bool)
+
+        self._chk_volume.blockSignals(True)
+        self._chk_peak.blockSignals(True)
+        self._chk_volume.setChecked(show_volume)
+        self._chk_peak.setChecked(show_peaks)
+        self._chk_volume.blockSignals(False)
+        self._chk_peak.blockSignals(False)
+
+    def _save_settings(self):
+        """
+        Save UI settings (Show Volume, Show Peaks toggle states).
+        """
+        settings = QSettings("QGIS", "TUFLOW_Tools")
+        settings.setValue("qplot/show_volume", self._chk_volume.isChecked())
+        settings.setValue("qplot/show_peaks", self._chk_peak.isChecked())
+
     # --------------------- ACTIVE LAYER CHANGE ---------------------
     def _on_current_layer_changed(self, new_layer: Optional[QgsMapLayer]):
         """
@@ -369,8 +561,10 @@ class TimeSeriesPlotWindow(QDialog):
     # --------------------- REFRESH / DRAW ---------------------
     def _refresh_plot(self):
         """
-        Scan ALL vector layers, collect all selected features, and plot their Q time series.
-        - Each selected feature must have an 'ID' field (exact full-string match to the CSV 'Q <ID>' token).
+        Scan all added layers, collect selected feature IDs, then plot them from all CHECKED layers.
+        Strategy:
+        1. Collect all selected feature IDs from all added layers
+        2. For each CHECKED layer, find features with matching IDs and plot them
         """
         # Re-entrancy guard: if a refresh is already running, mark pending and return.
         if getattr(self, "_refresh_in_progress", False):
@@ -378,131 +572,76 @@ class TimeSeriesPlotWindow(QDialog):
             return
 
         self._refresh_in_progress = True
+
+        # Reset layer metrics at the start of each refresh
+        self._layer_metrics = {}
+
         payloads: List[Dict[str, object]] = []
-        info_lines: List[str] = []
-
-        # If match-single is enabled, choose one selected feature ID (first encountered)
-        # and then search for that ID across each vector layer (regardless of whether
-        # the feature is selected in that layer).
-        match_single = (
-            getattr(self, "_chk_match_single", None)
-            and self._chk_match_single.isChecked()
-        )
-        search_id: Optional[str] = None
-        if match_single:
-            # collect all selected features across all vector layers
-            all_sel = []
-            for map_layer in QgsProject.instance().mapLayers().values():
-                if map_layer.type() != map_layer.VectorLayer:
-                    continue
-                try:
-                    all_sel.extend([f for f in map_layer.selectedFeatures()])
-                except Exception:
-                    pass
-
-            if not all_sel:
-                info_lines.append("Match-single enabled but no selected feature found")
-                match_single = False
-            else:
-                # pick first selected feature's ID
-                first = all_sel[0]
-                search_id = (
-                    str(first["ID"]).strip() if "ID" in first.fields().names() else ""
-                )
-                if not search_id:
-                    info_lines.append(
-                        "Match-single: selected feature has empty or missing ID"
-                    )
-                    match_single = False
-
-        # Determine user-selected layers in the Layers panel (if available).
-        selected_layer_ids = set()
-        try:
-            if iface and hasattr(iface, "layerTreeView"):
-                sel_layers = iface.layerTreeView().selectedLayers()
-                selected_layer_ids = {layer.id() for layer in sel_layers}
-        except Exception:
-            selected_layer_ids = set()
-
-        # Iterate all vector layers
-        for map_layer in QgsProject.instance().mapLayers().values():
-            if map_layer.type() != map_layer.VectorLayer:
+        selected_ids: Dict[str, QgsMapLayer] = {}  # {ID: layer}
+        for layer_id in self._layer_enabled.keys():
+            map_layer = QgsProject.instance().mapLayer(layer_id)
+            if not map_layer or map_layer.type() != map_layer.VectorLayer:
                 continue
 
-            # Determine which features to process for this layer:
-            # - If match_single: find the feature with ID == search_id (if present)
-            # - Otherwise: use the layer's selected features
-            sel = []
-            try:
-                if match_single and search_id:
-                    # If the user has selected layers in the Layers panel, only consider
-                    # those layers. Otherwise, fall back to requiring that the layer
-                    # has feature selection (selectedFeatureIds / selectedFeatures).
-                    if selected_layer_ids:
-                        if map_layer.id() not in selected_layer_ids:
-                            continue
-                    else:
-                        try:
-                            if not map_layer.selectedFeatureIds():
-                                continue
-                        except Exception:
-                            # If selectedFeatureIds is not available, fall back to selectedFeatures check
-                            try:
-                                if not list(map_layer.selectedFeatures()):
-                                    continue
-                            except Exception:
-                                continue
+            sel = map_layer.selectedFeatures()
+            if not sel:
+                continue
 
-                    # find first feature with matching ID in this layer
-                    found = None
-                    for f in map_layer.getFeatures():
-                        try:
-                            if (
-                                "ID" in map_layer.fields().names()
-                                and str(f["ID"]).strip() == search_id
-                            ):
-                                found = f
-                                break
-                        except Exception:
-                            continue
-                    if found:
-                        sel = [found]
-                    else:
-                        # no match in this layer — skip
-                        continue
-                else:
-                    sel = map_layer.selectedFeatures()
-                    if not sel:
-                        continue
-            except Exception:
+            # Validate ID field
+            if "ID" not in map_layer.fields().names():
+                continue
+
+            # Collect all selected IDs
+            for f in sel:
+                id_val = str(f["ID"]).strip()
+                if id_val:
+                    selected_ids[id_val] = map_layer
+
+        if not selected_ids:
+            try:
+                self._last_plot_payloads = payloads
+                self._draw_plot()
+            finally:
+                self._refresh_in_progress = False
+            return
+
+        # Step 2: For each CHECKED layer, find and plot features with matching IDs
+        for layer_id, enabled in self._layer_enabled.items():
+            if not enabled:
+                continue  # Skip unchecked layers
+
+            map_layer = QgsProject.instance().mapLayer(layer_id)
+            if not map_layer or map_layer.type() != map_layer.VectorLayer:
+                continue
+
+            # Validate ID field
+            if "ID" not in map_layer.fields().names():
                 continue
 
             # Ensure sources ready for this layer
             self._prepare_sources_for_layer(map_layer)
             sources = self._layer_sources.get(map_layer.id(), [])
             if not sources:
-                info_lines.append(f"{map_layer.name()}: no Q CSV found")
                 continue
 
-            # Validate ID field once
-            has_id = "ID" in map_layer.fields().names()
-            if not has_id:
-                info_lines.append(f"{map_layer.name()}: missing 'ID' field")
-                continue
-
-            # For each selected feature in this layer, build a series
-            for f in sel:
-                id_val = str(f["ID"]).strip()
-                if not id_val:
-                    info_lines.append(f"{map_layer.name()}: empty ID (skipped)")
+            # For each selected ID, try to find it in this layer and plot
+            for id_val in selected_ids.keys():
+                # Find feature with this ID in current layer
+                found = None
+                try:
+                    for f in map_layer.getFeatures():
+                        if str(f["ID"]).strip() == id_val:
+                            found = f
+                            break
+                except Exception:
                     continue
+
+                if not found:
+                    continue  # This ID doesn't exist in this layer
 
                 # Resolve 'Q <ID>' header using EXACT token match
                 src, q_header = self._find_q_column_exact(sources, id_val)
                 if src is None or q_header is None:
-                    info_lines.append(
-                        f"{map_layer.name()}: no 'Q {id_val}' column (skipped)"
-                    )
                     continue
 
                 # Read time + Q
@@ -510,12 +649,10 @@ class TimeSeriesPlotWindow(QDialog):
                     t_vals, q_vals = self._read_two_columns(
                         src["path"], src["time"], q_header
                     )
-                except Exception as ex:
-                    info_lines.append(f"{map_layer.name()}: CSV read error ({ex})")
+                except Exception:
                     continue
 
                 if not t_vals:
-                    info_lines.append(f"{map_layer.name()}: no data for ID={id_val}")
                     continue
 
                 # Sort by time
@@ -547,10 +684,13 @@ class TimeSeriesPlotWindow(QDialog):
                     }
                 )
 
-                # Bottom info: include total volume for every series
-                info_lines.append(
-                    f"{map_layer.name()}: ID={id_val}  Qp={peak_q:.3f} m³/s  V={total_vol_m3:,.0f} m³"
-                )
+                # Store metrics for this layer (use first ID encountered)
+                if layer_id not in self._layer_metrics:
+                    self._layer_metrics[layer_id] = {
+                        "first_id": id_val,
+                        "peak_q": peak_q,
+                        "total_vol_m3": total_vol_m3,
+                    }
 
         # Auto toggles based on TOTAL series count
         n_series = len(payloads)
@@ -573,10 +713,13 @@ class TimeSeriesPlotWindow(QDialog):
             for chk in (self._chk_volume, self._chk_peak):
                 chk.setEnabled(True)
 
+        # Update layer table with metrics
+        self._refresh_layer_table()
+
         # Cache & draw
         try:
             self._last_plot_payloads = payloads
-            self._draw_plot(info_lines)
+            self._draw_plot()
         finally:
             # Clear in-progress flag and handle pending refresh
             self._refresh_in_progress = False
@@ -600,7 +743,7 @@ class TimeSeriesPlotWindow(QDialog):
 
     # --------------------- PLOTTING ---------------------
 
-    def _draw_plot(self, info_lines: Optional[List[str]] = None):
+    def _draw_plot(self):
         # Guard
         if not self._last_plot_payloads:
             self._show_empty("Select features with 'ID' in vector layers")
@@ -630,10 +773,12 @@ class TimeSeriesPlotWindow(QDialog):
             t_peak = p["t_peak"]
 
             # --- NEW LEGEND RULES ---
-            # If features are all from a single layer -> legend shows ID only.
-            # If features span multiple layers -> legend shows "Layer • ID".
+            # If features are all from a single layer -> legend shows ID only with Qp and V.
+            # If features span multiple layers -> legend shows "Layer • ID" with Qp and V.
             legend_label = (
-                id_val if n_layers_involved == 1 else f"{lyr.name()} • {id_val}"
+                f"{id_val} (Qp={peak_q:.3f}, V={p['total_vol_m3']:,.0f})"
+                if n_layers_involved == 1
+                else f"{lyr.name()} • {id_val} (Qp={peak_q:.3f}, V={p['total_vol_m3']:,.0f})"
             )
             # ------------------------
 
@@ -719,20 +864,8 @@ class TimeSeriesPlotWindow(QDialog):
         # Draw
         self._canvas.draw_idle()
 
-        # Bottom info
-        if info_lines:
-            self._hint.setText("\n".join(info_lines))
-        else:
-            s = []
-            for p in payloads:
-                lyr = p["layer"]
-                id_val = p["id_val"]
-                peak_q = p["peak_q"]
-                total_v = p["total_vol_m3"]
-                s.append(
-                    f"{lyr.name()}: ID={id_val}  Qp={peak_q:.3f} m³/s  V={total_v:,.0f} m³"
-                )
-            self._hint.setText("\n".join(s))
+        # Clear bottom info (no info text display)
+        self._hint.setText("")
 
     def _show_empty(self, title: str):
         self._ax.clear()
@@ -936,6 +1069,8 @@ class TimeSeriesPlotWindow(QDialog):
 
     # --------------------- CLOSE ---------------------
     def closeEvent(self, e):
+        self._save_settings()
+
         # Disconnect safely
         try:
             iface.currentLayerChanged.disconnect(self._on_current_layer_changed)

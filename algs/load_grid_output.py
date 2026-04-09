@@ -265,7 +265,9 @@ class ScenarioSelectionPage(QWizardPage):
                 _write_debug_log(msg)
 
             wizard.all_discovered_events = all_events
-            self.populate_table(self.scenarios_table, sorted(all_scenarios))
+            # Exclude ZAEM1 from scenarios
+            filtered_scenarios = {s for s in all_scenarios if s.upper() != "ZAEM1"}
+            self.populate_table(self.scenarios_table, sorted(filtered_scenarios))
             self.populate_table(self.events_table, sorted(all_events))
         finally:
             QApplication.restoreOverrideCursor()
@@ -447,6 +449,7 @@ class ScenarioSelectionPage(QWizardPage):
             "grid",
             "znz2",
             "tmax_h",
+            "zaem1",
         }
 
         parts = filename_str.split("_")
@@ -541,6 +544,7 @@ class ScenarioSelectionPage(QWizardPage):
             "grid",
             "znz2",
             "tmax_h",
+            "zaem1",
         }
         parts = re.split(r"[_|]", working_string)
         for part in parts:
@@ -766,9 +770,37 @@ class OutputDataTypePage(QWizardPage):
         self.output_table.setRowCount(len(all_types))
         sorted_types = sorted(all_types, key=lambda x: (x[1], x[0]))
 
+        # Determine default checked items: prefer HRTIF, fallback to TIF
+        hrtif_items = {(dt, gt) for dt, gt in all_types if gt == "HRTIF"}
+        tif_items = {(dt, gt) for dt, gt in all_types if gt == "TIF"}
+
+        # Check if d+HRTIF and h+HRTIF exist
+        has_d_hrtif = any(dt.lower() == "d" for dt, gt in hrtif_items)
+        has_h_hrtif = any(dt.lower() == "h" for dt, gt in hrtif_items)
+
+        if has_d_hrtif and has_h_hrtif:
+            # Prefer HRTIF: check only d+HRTIF and h+HRTIF
+            default_checked = {
+                (dt, gt)
+                for dt, gt in all_types
+                if (dt.lower() in ("d", "h") and gt == "HRTIF")
+            }
+        else:
+            # Fallback to TIF: check only d+TIF and h+TIF
+            has_d_tif = any(dt.lower() == "d" for dt, gt in tif_items)
+            has_h_tif = any(dt.lower() == "h" for dt, gt in tif_items)
+            if has_d_tif and has_h_tif:
+                default_checked = {
+                    (dt, gt)
+                    for dt, gt in all_types
+                    if (dt.lower() in ("d", "h") and gt == "TIF")
+                }
+            else:
+                default_checked = set()
+
         for i, (dt, gt) in enumerate(sorted_types):
             cb = QCheckBox()
-            cb.setChecked(True)
+            cb.setChecked((dt, gt) in default_checked)
             self.output_table.setCellWidget(i, 0, cb)
             self.output_table.setItem(i, 1, QTableWidgetItem(dt))
             self.output_table.setItem(i, 2, QTableWidgetItem(gt))
@@ -917,8 +949,11 @@ class PreviewPage(QWizardPage):
         sel_scen_lc = {s.lower() for s in selected_scenarios}
         sel_ev_lc = {e.lower() for e in selected_events}
 
+        # Improved scenario filtering: exclude files if they contain any unchecked scenario
+        # (i.e., all file scenarios must be in the selected scenarios)
         if sel_scen_lc:
-            if not file_scen_lc.intersection(sel_scen_lc):
+            # Check if any file scenario is NOT in selected scenarios
+            if not file_scen_lc.issubset(sel_scen_lc):
                 return False
 
         if sel_ev_lc:

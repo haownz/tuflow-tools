@@ -11,7 +11,6 @@ from qgis.core import (
     QgsProcessingParameterEnum,
     QgsProcessingParameterNumber,
     QgsProject,
-    QgsMapLayerType,
 )
 from osgeo import gdal
 
@@ -28,12 +27,7 @@ class MergeRastersAlgorithm(QgsProcessingAlgorithm):
     P_RESAMPLING = "RESAMPLING"
     P_OUTPUT = "OUTPUT"
 
-    RESOLUTION_OPTIONS = [
-        "Highest",
-        "Lowest",
-        "Average",
-        "Custom"
-    ]
+    RESOLUTION_OPTIONS = ["Highest", "Lowest", "Average", "Custom"]
 
     RESAMPLING_OPTIONS = [
         "Nearest Neighbour",
@@ -42,7 +36,7 @@ class MergeRastersAlgorithm(QgsProcessingAlgorithm):
         "Cubic Spline",
         "Lanczos",
         "Average",
-        "Mode"
+        "Mode",
     ]
 
     RESAMPLING_MAP = [
@@ -52,7 +46,7 @@ class MergeRastersAlgorithm(QgsProcessingAlgorithm):
         gdal.GRA_CubicSpline,
         gdal.GRA_Lanczos,
         gdal.GRA_Average,
-        gdal.GRA_Mode
+        gdal.GRA_Mode,
     ]
 
     def tr(self, message):
@@ -68,10 +62,10 @@ class MergeRastersAlgorithm(QgsProcessingAlgorithm):
         return self.tr("Merge Rasters")
 
     def group(self):
-        return "General Tools"
+        return "3 - Utilities"
 
     def groupId(self):
-        return "general_tools"
+        return "utilities"
 
     def shortHelpString(self):
         return self.tr(
@@ -86,7 +80,7 @@ class MergeRastersAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterMultipleLayers(
                 self.P_INPUTS,
                 self.tr("Input Rasters (Override with Last Wins)"),
-                layerType=QgsProcessing.TypeRaster
+                layerType=QgsProcessing.TypeRaster,
             )
         )
 
@@ -95,7 +89,7 @@ class MergeRastersAlgorithm(QgsProcessingAlgorithm):
                 self.P_RESOLUTION_STRATEGY,
                 self.tr("Resolution Strategy"),
                 options=self.RESOLUTION_OPTIONS,
-                defaultValue=0  # Highest
+                defaultValue=0,  # Highest
             )
         )
 
@@ -105,7 +99,7 @@ class MergeRastersAlgorithm(QgsProcessingAlgorithm):
                 self.tr("Custom Resolution (used if strategy is Custom)"),
                 type=QgsProcessingParameterNumber.Double,
                 defaultValue=None,
-                optional=True
+                optional=True,
             )
         )
 
@@ -114,7 +108,7 @@ class MergeRastersAlgorithm(QgsProcessingAlgorithm):
                 self.P_RESAMPLING,
                 self.tr("Resampling Algorithm"),
                 options=self.RESAMPLING_OPTIONS,
-                defaultValue=0  # Nearest Neighbour
+                defaultValue=0,  # Nearest Neighbour
             )
         )
 
@@ -139,14 +133,14 @@ class MergeRastersAlgorithm(QgsProcessingAlgorithm):
         if not out_path:
             raise QgsProcessingException(self.tr("No output path specified."))
 
-        if not out_path.lower().endswith('.vrt'):
-            out_path += '.vrt'
+        if not out_path.lower().endswith(".vrt"):
+            out_path += ".vrt"
 
         input_paths = []
         for layer in layers:
             if not layer.isValid():
                 continue
-            
+
             source = layer.source()
             # Handle standard file-based rasters and others (like WMS/WCS if applicable, though usually just file paths are used)
             # Some providers like 'gdal' prefix files or use tricky paths, but typically source() is the path or VRT.
@@ -154,33 +148,36 @@ class MergeRastersAlgorithm(QgsProcessingAlgorithm):
             input_paths.append(source)
 
         if not input_paths:
-            raise QgsProcessingException(self.tr("No valid input paths found from the selected layers."))
+            raise QgsProcessingException(
+                self.tr("No valid input paths found from the selected layers.")
+            )
 
         feedback.pushInfo(f"Merging {len(input_paths)} rasters...")
         for idx, path in enumerate(input_paths):
-            feedback.pushInfo(f"[{idx+1}] {path}")
+            feedback.pushInfo(f"[{idx + 1}] {path}")
 
-        res_str = 'highest'
+        res_str = "highest"
         if res_idx == 1:
-            res_str = 'lowest'
+            res_str = "lowest"
         elif res_idx == 2:
-            res_str = 'average'
+            res_str = "average"
         elif res_idx == 3:
-            res_str = 'user'
+            res_str = "user"
             # QGIS might return 0.0 if the optional field is left blank.
             if not custom_res or custom_res <= 0:
-                raise QgsProcessingException(self.tr("Custom resolution must be > 0 when Custom strategy is selected."))
+                raise QgsProcessingException(
+                    self.tr(
+                        "Custom resolution must be > 0 when Custom strategy is selected."
+                    )
+                )
 
         resamp_alg = self.RESAMPLING_MAP[resamp_idx]
 
-        build_vrt_kwargs = {
-            'resampleAlg': resamp_alg,
-            'resolution': res_str
-        }
+        build_vrt_kwargs = {"resampleAlg": resamp_alg, "resolution": res_str}
 
-        if res_str == 'user':
-            build_vrt_kwargs['xRes'] = custom_res
-            build_vrt_kwargs['yRes'] = custom_res
+        if res_str == "user":
+            build_vrt_kwargs["xRes"] = custom_res
+            build_vrt_kwargs["yRes"] = custom_res
 
         # In gdal.BuildVRT, the *last* dataset in the list overrides earlier ones in overlapping areas.
         try:
@@ -188,7 +185,7 @@ class MergeRastersAlgorithm(QgsProcessingAlgorithm):
             ds = gdal.BuildVRT(out_path, input_paths, options=vrt_options)
             if ds is None:
                 raise Exception("GDAL returned None when building VRT.")
-            
+
             ds.FlushCache()
             ds = None
         except Exception as e:

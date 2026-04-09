@@ -36,10 +36,10 @@ class RestoreLayerNameAlgorithm(QgsProcessingAlgorithm):
         return self.tr("Restore Layer Name")
 
     def group(self):
-        return self.tr("General Tools")
+        return self.tr("3 - Utilities")
 
     def groupId(self):
-        return "general_tools"
+        return "utilities"
 
     def shortHelpString(self):
         return self.tr(
