@@ -1,5 +1,12 @@
 # Changelog
 
+## Version 1.5.0 (2026-04-09)
+### New Features
+- **Batch Theme PDF Export**: Batch export QGIS print layouts to PDF by iterating through map themes.
+- **Mapping CSV to Legend**: Apply TUFLOW styling rules and legends to layers using mapping CSVs.
+- **Sample Rasters on Grid**: Sample multiple raster layers across a generated grid of points.
+- **XMDF Output**: Extract and process TUFLOW XMDF format outputs.
+
 ## Version 1.4.0 (2026-03-27)
 ### New Features
 - **Depth Discharge Curve**: Build composite Q–H curves (orifice, weir, pipe capacity) with interactive plotting and CSV export. Includes support for multiple QML fallbacks.

@@ -7,7 +7,7 @@
 **A comprehensive QGIS plugin for TUFLOW hydraulic modelling — pre-processing, post-processing, and analysis.**
 
 [![QGIS](https://img.shields.io/badge/QGIS-3.22%2B-green?logo=qgis)](https://qgis.org)
-[![Version](https://img.shields.io/badge/version-1.4.0-blue)](https://github.com/haownz/tuflow-tools/releases)
+[![Version](https://img.shields.io/badge/version-1.5.0-blue)](https://github.com/haownz/tuflow-tools/releases)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-informational)]()
 
@@ -32,12 +32,14 @@
 | **Load PO Lines** | Import and visualise TUFLOW Plot Output (PO) line results |
 | **Load Sample Points** | Load TUFLOW sample point outputs with interactive layer selection UI |
 | **Load Profile Sections** | Generate cross-section profiles along selected line features |
+| **XMDF Output** | Extract and process TUFLOW XMDF format outputs |
 
 ### 📐 Cross Section & Alignment Analysis
 | Tool | Description |
 |---|---|
 | **Cross Sections along Alignment** | Interactive tool for long-section and cross-section viewing side-by-side; supports drawing or selecting alignment on map with real-time cursor tracking |
 | **Sample Rasters at Vertices** | Sample multiple raster layers at point/vertex locations simultaneously |
+| **Sample Rasters on Grid** | Sample multiple raster layers across a generated grid of points |
 | **WSE Comparison** | Compare Water Surface Elevation (WSE) rasters between scenarios |
 
 ### 🗺️ Flood Analysis
@@ -58,6 +60,8 @@
 | **Append Features** | Merge features between vector layers |
 | **Batch Rename Layers** | Rename multiple map layers using pattern matching |
 | **Restore Layer Name** | Restore layer names from their source file paths |
+| **Batch Theme PDF Export** | Batch export QGIS print layouts to PDF by iterating through map themes |
+| **Mapping CSV to Legend** | Apply TUFLOW styling rules and legends to layers using mapping CSVs |
 
 ### 📊 Time Series & Monitoring
 | Tool | Description |
@@ -114,6 +118,13 @@ Or search for any tool by name in the Processing Toolbox search bar.
 ---
 
 ## 📋 Changelog
+
+### Version 1.5.0 (2026-04-09)
+#### New Features
+- **Batch Theme PDF Export**: Batch export QGIS print layouts to PDF by iterating through map themes.
+- **Mapping CSV to Legend**: Apply TUFLOW styling rules and legends to layers using mapping CSVs.
+- **Sample Rasters on Grid**: Sample multiple raster layers across a generated grid of points.
+- **XMDF Output**: Extract and process TUFLOW XMDF format outputs.
 
 ### Version 1.4.0 (2026-03-27)
 #### New Features
