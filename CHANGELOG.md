@@ -1,5 +1,18 @@
 # Changelog
 
+## Version 1.6.0 (2026-04-29)
+### New Features
+- **Plugin Settings Export/Import**: Added functionality to save and load plugin configurations to external JSON files.
+- **Sort Layers by Name**: New toolbar button and logic to sort QGIS layers within a group alphabetically.
+- **Clip Raster by Depth**: New processing algorithm to extract raster regions based on depth thresholds.
+- **Extract Field Across Layers**: Utility to pull specific field values from multiple vector layers simultaneously.
+- **Quick Access Buttons**: Integrated dedicated ribbon buttons for Batch Theme Export and Layer Sorting into the main toolbar.
+
+### Improvements
+- **UI Enhancements**: Added visual highlighting for selected tasks and improved task progress feedback in long-running processes.
+- **Theme Management**: Refactored map theme handling to improve reliability during batch PDF exports.
+- **Code Cleanup**: Removed obsolete QA consistency scripts and optimized the processing provider's algorithm registration.
+
 ## Version 1.5.0 (2026-04-09)
 ### New Features
 - **Batch Theme PDF Export**: Batch export QGIS print layouts to PDF by iterating through map themes.

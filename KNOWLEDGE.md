@@ -8,7 +8,7 @@ The plugin follows a standard QGIS Processing Provider architecture:
 
 -   **`plugin.py`**: The main entry point (`TuflowToolsPlugin`). It registers the processing provider, initializes the "TUFLOW Tools" toolbar, and sets up GUI actions like "Apply Style" and "Batch Rename".
 -   **`provider.py`**: Defintes the `TuflowProcessingProvider`, which acts as a container for all processing algorithms. It registers them with the QGIS Processing Registry.
--   **`settings.py`**: Implements `PluginSettings` for global configuration management using `QSettings`. Handles model paths, style paths, and customizable style mappings.
+-   **`settings.py`**: Implements `PluginSettings` for global configuration management using `QSettings`. Handles model paths, style paths, and customizable style mappings. Includes methods for **Exporting and Importing** settings as JSON.
 -   **`style_manager.py`**: A dedicated `StyleManager` that applies `.qml` styles to layers based on wildcard patterns defined in settings.
 
 ## 🧩 Core Algorithm Categories
@@ -32,6 +32,7 @@ Interactive tools for spatial profile analysis.
 Post-processing tools for flood impact mapping.
 -   **Flood Hazard Classify**: Classifies depth/velocity rasters into hazard categories.
 -   **Inundation Boundary**: Generates closed polygons from flood depth rasters using depth cutoffs.
+-   **Clip Raster by Depth**: Extracts raster areas based on specific depth thresholds.
 
 ### 🛠️ Pre-processing & GIS Utilities
 Data preparation and management tools.
@@ -39,6 +40,8 @@ Data preparation and management tools.
 -   **Process Land Cover**: Automated clipping and merging of land cover data.
 -   **GIS Location / Append Features**: General spatial utilities for data manipulation.
 -   **Batch Rename / Restore Name**: Tools for managing layer naming conventions.
+-   **Extract Field Across Layers**: Pulls specific field values from multiple vector layers simultaneously.
+-   **Sort Layers by Name**: Alphabetically sorts layers within a selected group.
 
 ### 📊 Time Series & Monitoring
 Real-time simulation tracking and plotting.

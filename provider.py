@@ -28,11 +28,16 @@ from .algs.lc_add_fields import LandCoverAddFieldsAlgorithm
 from .algs.inundation_boundary import InundationBoundaryAlgorithm
 from .algs.rasters_comparison import RastersComparisonAlgorithm
 from .algs.depth_discharge_curve import DepthDischargeCurveAlgorithm
+from .algs.clip_raster_by_depth import ClipRasterByDepthAlgorithm
 from .algs.merge_rasters import MergeRastersAlgorithm
 from .algs.mapping_csv_to_legend import MappingCSVToLegendAlgorithm
 from .algs.xmdf_output import XmdfOutputAlgorithm
 from .algs.batch_theme_export import BatchThemeExportAlgorithm
+from .algs.theme_manager import ThemeManagerAlgorithm
 from .algs.sample_rasters_grid import SampleRastersGridAlgorithm
+
+
+from .algs.extract_field_across_layers import ExtractFieldAcrossLayersAlgorithm
 
 
 class TuflowProcessingProvider(QgsProcessingProvider):
@@ -93,6 +98,7 @@ class TuflowProcessingProvider(QgsProcessingProvider):
             InundationBoundaryAlgorithm()
         )  # Trace flooded footprints from depths
         self.addAlgorithm(RastersComparisonAlgorithm())  # compare generic rasters
+        self.addAlgorithm(ClipRasterByDepthAlgorithm())  # clip raster by depth
         self.addAlgorithm(DepthDischargeCurveAlgorithm())  # build a composite Q-H curve
         self.addAlgorithm(MergeRastersAlgorithm())  # merge multiple rasters into a VRT
         self.addAlgorithm(
@@ -102,4 +108,6 @@ class TuflowProcessingProvider(QgsProcessingProvider):
         self.addAlgorithm(
             BatchThemeExportAlgorithm()
         )  # batch export layout to pdf with themes
+        self.addAlgorithm(ThemeManagerAlgorithm())  # manage map themes
         self.addAlgorithm(SampleRastersGridAlgorithm())  # sample rasters at grid points
+        self.addAlgorithm(ExtractFieldAcrossLayersAlgorithm())  # extract field across layers

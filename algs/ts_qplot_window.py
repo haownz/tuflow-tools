@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-TUFLOW tools — Flow (Q) Plot Viewer (Enhanced multi-layer support)
+TUFLOW tools — Flow Plot Viewer (Enhanced multi-layer support)
 
 IMPROVEMENTS:
 - Layer Management Table: Select which vector layers (PO Lines) to include in the plot
@@ -72,7 +72,7 @@ _DEFAULT_COLORS = [
 
 class TimeSeriesPlotWindow(QDialog):
     """
-    TUFLOW tools — Flow (Q) Plot Viewer.
+    TUFLOW tools — Flow Plot Viewer.
     Auto-scans selected features across all vector layers and overlays their Q time series.
     """
 
@@ -90,7 +90,7 @@ class TimeSeriesPlotWindow(QDialog):
         q_headers_1d: Optional[List[str]] = None,
     ):
         super().__init__(parent)
-        self.setWindowTitle("TUFLOW tools — Flow (Q) Plot Viewer")
+        self.setWindowTitle("TUFLOW tools — Flow Plot Viewer")
         self.resize(1200, 900)  # Increased height for better space
 
         # Inputs (initial)
@@ -128,9 +128,9 @@ class TimeSeriesPlotWindow(QDialog):
         self._hint.setWordWrap(True)
 
         # ----- Layer management table -----
-        self._layer_table = QTableWidget(0, 5)
+        self._layer_table = QTableWidget(0, 7)
         self._layer_table.setHorizontalHeaderLabels(
-            ["Include", "Vector Layer (PO Lines)", "First ID", "Qp (m³/s)", "V (m³)"]
+            ["Include", "Vector Layer (PO Lines)", "First ID", "Qp (m³/s)", "V (m³)", "V+ (m³)", "V- (m³)"]
         )
         self._layer_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
         self._layer_table.setColumnWidth(0, 60)
@@ -145,6 +145,12 @@ class TimeSeriesPlotWindow(QDialog):
         )
         self._layer_table.horizontalHeader().setSectionResizeMode(
             4, QHeaderView.ResizeToContents
+        )
+        self._layer_table.horizontalHeader().setSectionResizeMode(
+            5, QHeaderView.ResizeToContents
+        )
+        self._layer_table.horizontalHeader().setSectionResizeMode(
+            6, QHeaderView.ResizeToContents
         )
         self._layer_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._layer_table.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -210,6 +216,11 @@ class TimeSeriesPlotWindow(QDialog):
 
         # Last plot payloads (one dict per series) for redraw
         self._last_plot_payloads: List[Dict[str, object]] = []
+
+        # Hover annotation structures
+        self._hover_lines = []
+        self._annot = None
+        self._canvas.mpl_connect("motion_notify_event", self._on_plot_hover)
 
         # Load saved settings
         self._load_settings()
@@ -411,6 +422,8 @@ class TimeSeriesPlotWindow(QDialog):
                 first_id = metrics.get("first_id", "-")
                 peak_q = metrics.get("peak_q", "-")
                 total_vol = metrics.get("total_vol_m3", "-")
+                fwd_vol = metrics.get("fwd_vol_m3", "-")
+                rev_vol = metrics.get("rev_vol_m3", "-")
 
                 # First ID column
                 id_item = QTableWidgetItem(str(first_id))
@@ -435,6 +448,24 @@ class TimeSeriesPlotWindow(QDialog):
                 v_item.setFlags(v_item.flags() & ~Qt.ItemIsEditable)
                 self._layer_table.setItem(row, 4, v_item)
 
+                # V+ column
+                if isinstance(fwd_vol, (int, float)):
+                    v_fwd_text = f"{fwd_vol:,.0f}"
+                else:
+                    v_fwd_text = str(fwd_vol)
+                v_fwd_item = QTableWidgetItem(v_fwd_text)
+                v_fwd_item.setFlags(v_fwd_item.flags() & ~Qt.ItemIsEditable)
+                self._layer_table.setItem(row, 5, v_fwd_item)
+
+                # V- column
+                if isinstance(rev_vol, (int, float)):
+                    v_rev_text = f"{rev_vol:,.0f}"
+                else:
+                    v_rev_text = str(rev_vol)
+                v_rev_item = QTableWidgetItem(v_rev_text)
+                v_rev_item.setFlags(v_rev_item.flags() & ~Qt.ItemIsEditable)
+                self._layer_table.setItem(row, 6, v_rev_item)
+
         self._layer_table.blockSignals(False)
 
     def _on_layer_checkbox_changed(self, state):
@@ -454,26 +485,38 @@ class TimeSeriesPlotWindow(QDialog):
     # --------------------- SETTINGS PERSISTENCE ---------------------
     def _load_settings(self):
         """
-        Load saved UI settings (Show Volume, Show Peaks toggle states).
+        Load saved UI settings (Show Volume, Show Peaks toggle states and layer list).
         """
         settings = QSettings("QGIS", "TUFLOW_Tools")
-        show_volume = settings.value("qplot/show_volume", True, type=bool)
-        show_peaks = settings.value("qplot/show_peaks", True, type=bool)
+        self._user_show_volume = settings.value("qplot/show_volume", True, type=bool)
+        self._user_show_peaks = settings.value("qplot/show_peaks", True, type=bool)
 
         self._chk_volume.blockSignals(True)
         self._chk_peak.blockSignals(True)
-        self._chk_volume.setChecked(show_volume)
-        self._chk_peak.setChecked(show_peaks)
+        self._chk_volume.setChecked(self._user_show_volume)
+        self._chk_peak.setChecked(self._user_show_peaks)
         self._chk_volume.blockSignals(False)
         self._chk_peak.blockSignals(False)
 
+        # Restore enabled layers
+        saved_layers = settings.value("qplot/layer_enabled", {}, type=dict)
+        if isinstance(saved_layers, dict):
+            # Only keep layers that still exist in the current project
+            self._layer_enabled = {}
+            for layer_id, enabled in saved_layers.items():
+                if QgsProject.instance().mapLayer(layer_id):
+                    self._layer_enabled[layer_id] = bool(enabled)
+        else:
+            self._layer_enabled = {}
+
     def _save_settings(self):
         """
-        Save UI settings (Show Volume, Show Peaks toggle states).
+        Save UI settings (Show Volume, Show Peaks toggle states and layer list).
         """
         settings = QSettings("QGIS", "TUFLOW_Tools")
-        settings.setValue("qplot/show_volume", self._chk_volume.isChecked())
-        settings.setValue("qplot/show_peaks", self._chk_peak.isChecked())
+        settings.setValue("qplot/show_volume", getattr(self, "_user_show_volume", True))
+        settings.setValue("qplot/show_peaks", getattr(self, "_user_show_peaks", True))
+        settings.setValue("qplot/layer_enabled", self._layer_enabled)
 
     # --------------------- ACTIVE LAYER CHANGE ---------------------
     def _on_current_layer_changed(self, new_layer: Optional[QgsMapLayer]):
@@ -598,6 +641,7 @@ class TimeSeriesPlotWindow(QDialog):
                     selected_ids[id_val] = map_layer
 
         if not selected_ids:
+            self._refresh_layer_table()
             try:
                 self._last_plot_payloads = payloads
                 self._draw_plot()
@@ -663,7 +707,7 @@ class TimeSeriesPlotWindow(QDialog):
                 peak_q = max(q_vals, key=abs)
                 i_peak = q_vals.index(peak_q)
                 t_peak = t_vals[i_peak]
-                cum_vol_m3, total_vol_m3 = self._compute_cumulative_volume(
+                cum_vol_m3, total_vol_m3, fwd_vol_m3, rev_vol_m3 = self._compute_cumulative_volume(
                     t_vals, q_vals
                 )
 
@@ -677,6 +721,8 @@ class TimeSeriesPlotWindow(QDialog):
                         "q_vals": q_vals,
                         "cum_vol_m3": cum_vol_m3,
                         "total_vol_m3": total_vol_m3,
+                        "fwd_vol_m3": fwd_vol_m3,
+                        "rev_vol_m3": rev_vol_m3,
                         "id_val": id_val,
                         "peak_q": peak_q,
                         "t_peak": t_peak,
@@ -690,6 +736,8 @@ class TimeSeriesPlotWindow(QDialog):
                         "first_id": id_val,
                         "peak_q": peak_q,
                         "total_vol_m3": total_vol_m3,
+                        "fwd_vol_m3": fwd_vol_m3,
+                        "rev_vol_m3": rev_vol_m3,
                     }
 
         # Auto toggles based on TOTAL series count
@@ -701,17 +749,17 @@ class TimeSeriesPlotWindow(QDialog):
                 chk.setChecked(False)
                 chk.setEnabled(False)
                 chk.blockSignals(False)
-        elif n_series == 1:
-            # Enable & turn ON both toggles
-            for chk in (self._chk_volume, self._chk_peak):
-                chk.blockSignals(True)
-                chk.setEnabled(True)
-                chk.setChecked(True)
-                chk.blockSignals(False)
         else:
-            # No series → allow toggles but keep state; show empty later
-            for chk in (self._chk_volume, self._chk_peak):
-                chk.setEnabled(True)
+            # Enable & restore user preferred state for both toggles
+            self._chk_volume.blockSignals(True)
+            self._chk_volume.setEnabled(True)
+            self._chk_volume.setChecked(getattr(self, "_user_show_volume", True))
+            self._chk_volume.blockSignals(False)
+
+            self._chk_peak.blockSignals(True)
+            self._chk_peak.setEnabled(True)
+            self._chk_peak.setChecked(getattr(self, "_user_show_peaks", True))
+            self._chk_peak.blockSignals(False)
 
         # Update layer table with metrics
         self._refresh_layer_table()
@@ -736,6 +784,12 @@ class TimeSeriesPlotWindow(QDialog):
         Redraw when the user toggles volume or peaks.
         In multi-series mode, toggles are disabled+OFF via _refresh_plot.
         """
+        sender = self.sender()
+        if sender == self._chk_volume:
+            self._user_show_volume = self._chk_volume.isChecked()
+        elif sender == self._chk_peak:
+            self._user_show_peaks = self._chk_peak.isChecked()
+
         if not self._last_plot_payloads:
             self._show_empty("Select features with 'ID' in vector layers")
             return
@@ -762,6 +816,7 @@ class TimeSeriesPlotWindow(QDialog):
         self._remove_secondary_axis()
 
         handles, labels = [], []
+        self._hover_lines = []
 
         for p in payloads:
             t_vals = p["t_vals"]
@@ -773,18 +828,19 @@ class TimeSeriesPlotWindow(QDialog):
             t_peak = p["t_peak"]
 
             # --- NEW LEGEND RULES ---
-            # If features are all from a single layer -> legend shows ID only with Qp and V.
-            # If features span multiple layers -> legend shows "Layer • ID" with Qp and V.
+            # If features are all from a single layer -> legend shows ID only.
+            # If features span multiple layers -> legend shows "Layer • ID".
             legend_label = (
-                f"{id_val} (Qp={peak_q:.3f}, V={p['total_vol_m3']:,.0f})"
+                f"{id_val}"
                 if n_layers_involved == 1
-                else f"{lyr.name()} • {id_val} (Qp={peak_q:.3f}, V={p['total_vol_m3']:,.0f})"
+                else f"{lyr.name()} • {id_val}"
             )
             # ------------------------
 
             line = self._ax.plot(
-                t_vals, q_vals, color=color, linewidth=1.8, label=legend_label
+                t_vals, q_vals, color=color, linewidth=1.8, label=legend_label, picker=5
             )[0]
+            self._hover_lines.append((line, legend_label))
 
             # Peak markers/annotations ONLY if peaks toggle is ON
             if self._chk_peak.isChecked():
@@ -814,7 +870,7 @@ class TimeSeriesPlotWindow(QDialog):
         # Axes labels/title/grid
         self._ax.set_xlabel("Time (h)")
         self._ax.set_ylabel("Flow (m³/s)")
-        self._ax.set_title("Flow (Q) time series")
+        self._ax.set_title("Flow time series")
         self._ax.grid(True, alpha=0.4)
 
         # Tight axes margins
@@ -825,9 +881,11 @@ class TimeSeriesPlotWindow(QDialog):
         if all_t:
             self._ax.set_xlim(min(all_t), max(all_t))
 
-        # Left axis baseline at 0
-        top_q = self._ax.get_ylim()[1]
-        self._ax.set_ylim(0.0, top_q)
+        # Left axis baseline at 0 or dynamic lower limit
+        bottom_q, top_q = self._ax.get_ylim()
+        if bottom_q > 0:
+            bottom_q = 0.0
+        self._ax.set_ylim(bottom_q, top_q)
         self._ax.axhline(0.0, color="#888", linewidth=0.8, alpha=0.6, zorder=0)
 
         # Right axis (Volume) — only if SINGLE series AND toggle ON
@@ -846,9 +904,11 @@ class TimeSeriesPlotWindow(QDialog):
             self._ax2.set_ylabel("Accumulated Volume (10³ m³)")
             self._ax2.grid(False)
             self._ax2.set_xlim(self._ax.get_xlim())
-            # Align baseline at 0
-            top_v = self._ax2.get_ylim()[1]
-            self._ax2.set_ylim(0.0, top_v)
+            # Align baseline at 0 or dynamic lower limit
+            bottom_v, top_v = self._ax2.get_ylim()
+            if bottom_v > 0:
+                bottom_v = 0.0
+            self._ax2.set_ylim(bottom_v, top_v)
 
         # Legend (top-left) with smaller font size
         self._ax.legend(
@@ -861,15 +921,90 @@ class TimeSeriesPlotWindow(QDialog):
             fontsize=8,
         )
 
+        # Recreate hover annotation
+        self._annot = self._ax.annotate(
+            "",
+            xy=(0, 0),
+            xytext=(10, 10),
+            textcoords="offset points",
+            bbox=dict(boxstyle="round", fc="white", alpha=0.9, ec="gray", linewidth=1.5),
+            fontsize=9,
+            zorder=10,
+            multialignment="left",
+            linespacing=1.5,
+        )
+        self._annot.set_visible(False)
+
         # Draw
         self._canvas.draw_idle()
 
         # Clear bottom info (no info text display)
         self._hint.setText("")
 
+    def _on_plot_hover(self, event):
+        """Handle mouse hover on plot curves to show legend name in tooltip."""
+        if not self._ax or not getattr(self, "_annot", None):
+            return
+
+        vis = self._annot.get_visible()
+        if event.inaxes == self._ax:
+            for line, label in self._hover_lines:
+                cont, ind = line.contains(event)
+                if cont:
+                    # Text up to 30 characters (including punctuations and symbols)
+                    label_text = label[:30] + "..." if len(label) > 30 else label
+                    
+                    # Get the closest data point coordinates on the curve
+                    xdata, ydata = line.get_data()
+                    ind_val = ind["ind"][0]  # first index matching the event
+                    hover_x = xdata[ind_val]
+                    hover_y = ydata[ind_val]
+                    
+                    text = f"{label_text}\nTime: {hover_x:.2f} h\nFlow: {hover_y:.3f} m³/s"
+                    
+                    self._annot.xy = (event.xdata, event.ydata)
+                    self._annot.set_text(text)
+                    self._annot.get_bbox_patch().set_edgecolor(line.get_color())
+                    self._annot.get_bbox_patch().set_alpha(0.9)
+                    self._annot.get_bbox_patch().set_linewidth(2)
+                    
+                    # Avoid boundary collision
+                    xlim = self._ax.get_xlim()
+                    ylim = self._ax.get_ylim()
+                    x_mid = (xlim[0] + xlim[1]) / 2
+                    y_mid = (ylim[0] + ylim[1]) / 2
+                    
+                    if event.xdata > x_mid:
+                        ha = "right"
+                        offset_x = -10
+                    else:
+                        ha = "left"
+                        offset_x = 10
+                        
+                    if event.ydata > y_mid:
+                        va = "top"
+                        offset_y = -10
+                    else:
+                        va = "bottom"
+                        offset_y = 10
+                        
+                    self._annot.set_position((offset_x, offset_y))
+                    self._annot.set_horizontalalignment(ha)
+                    self._annot.set_verticalalignment(va)
+                    
+                    self._annot.set_visible(True)
+                    self._canvas.draw_idle()
+                    return
+
+            if vis:
+                self._annot.set_visible(False)
+                self._canvas.draw_idle()
+
     def _show_empty(self, title: str):
         self._ax.clear()
         self._remove_secondary_axis()
+        self._hover_lines = []
+        self._annot = None
         self._ax.set_title(title)
         self._ax.set_xlabel("Time (h)")
         self._ax.set_ylabel("Flow (m³/s)")
@@ -984,25 +1119,32 @@ class TimeSeriesPlotWindow(QDialog):
     # --------------------- INTEGRATION ---------------------
     def _compute_cumulative_volume(
         self, t_vals: Tuple[float, ...], q_vals: Tuple[float, ...]
-    ) -> Tuple[List[float], float]:
+    ) -> Tuple[List[float], float, float, float]:
         """
         Compute accumulated volume (m³) via trapezoidal rule.
         Time in hours (per 'Time (h)'), Q in m³/s.
         V_i = 0.5*(Q[i-1]+Q[i]) * Δt_hours * 3600
-        Returns (cum_vol_series, total_volume).
+        Returns (cum_vol_series, total_volume, forward_volume, reverse_volume).
         """
         if len(t_vals) < 2:
-            return [0.0], 0.0
+            return [0.0], 0.0, 0.0, 0.0
         cum = [0.0]
         total = 0.0
+        fwd = 0.0
+        rev = 0.0
         for i in range(1, len(t_vals)):
             dt_h = t_vals[i] - t_vals[i - 1]
             if dt_h < 0:
                 continue
-            step = 0.5 * (q_vals[i - 1] + q_vals[i]) * dt_h * 3600.0  # hours→seconds
+            q_avg = 0.5 * (q_vals[i - 1] + q_vals[i])
+            step = q_avg * dt_h * 3600.0  # hours→seconds
             total += step
+            if q_avg > 0:
+                fwd += step
+            else:
+                rev += step
             cum.append(total)
-        return cum, total
+        return cum, total, fwd, rev
 
     # --------------------- AXES HOUSEKEEPING ---------------------
     def _remove_secondary_axis(self):

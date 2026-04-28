@@ -134,6 +134,22 @@ class WSEComparisonAlgorithm(QgsProcessingAlgorithm):
                                     depth_layer_found = lyr
                                     break
 
+                    # Fuzzy match fallback
+                    if not depth_layer_found:
+                        import difflib
+                        best_ratio = 0.0
+                        for lyr in project.mapLayers().values():
+                            if isinstance(lyr, QgsRasterLayer) and lyr.isValid():
+                                candidate_name = lyr.name().lower()
+                                if "_d_" in candidate_name:
+                                    ratio = difflib.SequenceMatcher(None, wse1_name.lower(), candidate_name).ratio()
+                                    if ratio > best_ratio:
+                                        best_ratio = ratio
+                                        depth_layer_found = lyr
+
+                        if best_ratio <= 0.5:
+                            depth_layer_found = None
+
                     if depth_layer_found:
                         p_depth = self.parameterDefinition(self.P_DEPTH)
                         if p_depth:

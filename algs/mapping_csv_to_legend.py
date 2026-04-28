@@ -13,6 +13,7 @@ from qgis.core import (
 )
 
 import csv
+from qgis.core import QgsSettings
 import os
 
 
@@ -80,20 +81,38 @@ class MappingCSVToLegendAlgorithm(QgsProcessingAlgorithm):
         )
         self.addParameter(p_source_index)
 
+        # Load recent histories from QgsSettings
+        settings = QgsSettings()
+        recent_targets = settings.value("TUFLOWTools/MappingCSV/recent_targets", [], type=list)
+        recent_legends = settings.value("TUFLOWTools/MappingCSV/recent_legends", [], type=list)
+
         # Target index parameter — string parameter for CSV column name
+        # We'll use a ComboBox to allow selection from history or manual input
         p_target_index = QgsProcessingParameterString(
             self.P_TARGET_INDEX,
             "Target Index (CSV Column)",
-            defaultValue="",
+            defaultValue=recent_targets[0] if recent_targets else "Landuse_ID",
         )
+        p_target_index.setMetadata({
+            'widget_wrapper': {
+                'use_line_edit': True,
+                'combo_box_values': recent_targets
+            }
+        })
         self.addParameter(p_target_index)
 
         # Legend column parameter — string parameter for CSV column name
         p_legend = QgsProcessingParameterString(
             self.P_LEGEND_COLUMN,
             "Legend Column (display text)",
-            defaultValue="",
+            defaultValue=recent_legends[0] if recent_legends else "Landuse_Description",
         )
+        p_legend.setMetadata({
+            'widget_wrapper': {
+                'use_line_edit': True,
+                'combo_box_values': recent_legends
+            }
+        })
         self.addParameter(p_legend)
 
         # Try to pre-fill layer with active layer
@@ -142,6 +161,21 @@ class MappingCSVToLegendAlgorithm(QgsProcessingAlgorithm):
             f"Target index column: '{target_index_column}', "
             f"Legend column: '{legend_column}'"
         )
+
+        # Save to history
+        settings = QgsSettings()
+        
+        recent_targets = settings.value("TUFLOWTools/MappingCSV/recent_targets", [], type=list)
+        if target_index_column in recent_targets:
+            recent_targets.remove(target_index_column)
+        recent_targets.insert(0, target_index_column)
+        settings.setValue("TUFLOWTools/MappingCSV/recent_targets", recent_targets[:10])
+        
+        recent_legends = settings.value("TUFLOWTools/MappingCSV/recent_legends", [], type=list)
+        if legend_column in recent_legends:
+            recent_legends.remove(legend_column)
+        recent_legends.insert(0, legend_column)
+        settings.setValue("TUFLOWTools/MappingCSV/recent_legends", recent_legends[:10])
 
         # Read CSV and create mapping
         csv_mapping = {}

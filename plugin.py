@@ -33,6 +33,9 @@ class TuflowToolsPlugin(QObject):
         self.toggle_labels_action = None
         self.duplicate_layer_action = None
         self.collapse_action = None
+        self.sort_group_action = None
+        self.theme_manager_action = None
+        self.batch_theme_export_action = None
 
     def initGui(self):
         self.provider = TuflowProcessingProvider()
@@ -115,6 +118,36 @@ class TuflowToolsPlugin(QObject):
         self.collapse_action.triggered.connect(self.collapse_all_sub_items)
         self.toolbar.addAction(self.collapse_action)
 
+        # Add Sort Group button
+        self.sort_group_action = QAction(
+            QgsApplication.getThemeIcon("/mActionArrowUp.svg"),
+            "Sort Group",
+            self.iface.mainWindow(),
+        )
+        self.sort_group_action.setToolTip("Sort layers and sub-groups in selected group alphabetically")
+        self.sort_group_action.triggered.connect(self.sort_group_layers)
+        self.toolbar.addAction(self.sort_group_action)
+
+        # Add Theme Manager button
+        self.theme_manager_action = QAction(
+            QgsApplication.getThemeIcon("/mActionShowAllLayers.svg"),
+            "Layer Theme Manager",
+            self.iface.mainWindow(),
+        )
+        self.theme_manager_action.setToolTip("Manage map themes: list, remove, edit, and wildcard replace theme names")
+        self.theme_manager_action.triggered.connect(self.run_theme_manager)
+        self.toolbar.addAction(self.theme_manager_action)
+
+        # Add Batch Theme Export button
+        self.batch_theme_export_action = QAction(
+            QgsApplication.getThemeIcon("/mActionSaveAsPDF.svg"),
+            "Batch Theme Export",
+            self.iface.mainWindow(),
+        )
+        self.batch_theme_export_action.setToolTip("Batch export layout by map themes to PDF")
+        self.batch_theme_export_action.triggered.connect(self.run_batch_theme_export)
+        self.toolbar.addAction(self.batch_theme_export_action)
+
         # Auto-update active layer name variable and label button state
         self.iface.currentLayerChanged.connect(self._update_active_layer_name)
         self.iface.currentLayerChanged.connect(self._update_label_button_state)
@@ -163,6 +196,14 @@ class TuflowToolsPlugin(QObject):
 
         self.toggle_labels_action.setEnabled(True)
         self.toggle_labels_action.setChecked(layer.labelsEnabled())
+
+    def run_theme_manager(self):
+        from .algs.theme_manager import show_theme_manager_dialog
+        show_theme_manager_dialog()
+
+    def run_batch_theme_export(self):
+        from .algs.batch_theme_export import show_batch_theme_export_dialog
+        show_batch_theme_export_dialog()
 
     def apply_style_to_selected(self):
         """Apply style to all currently selected layers."""
@@ -463,6 +504,60 @@ class TuflowToolsPlugin(QObject):
                     count += self._collapse_children(child, layer_tree_view)
 
         return count
+
+    def sort_group_layers(self):
+        """Sort layers in the selected group alphabetically by name."""
+        from qgis.core import QgsLayerTreeGroup
+
+        layer_tree_view = self.iface.layerTreeView()
+        current_node = layer_tree_view.currentNode()
+
+        if not current_node:
+            self.iface.messageBar().pushMessage(
+                "Sort Group",
+                "No item selected in Layers panel",
+                Qgis.Info,
+                2,
+            )
+            return
+
+        if not isinstance(current_node, QgsLayerTreeGroup):
+            self.iface.messageBar().pushMessage(
+                "Sort Group",
+                "Selected item is not a group",
+                Qgis.Warning,
+                2,
+            )
+            return
+
+        children = current_node.children()
+        if not children:
+            return
+
+        sorted_children = sorted(children, key=lambda n: n.name().lower())
+
+        if children == sorted_children:
+            return  # Already sorted
+
+        # To prevent QGIS from auto-deleting map layers from the project when they leave the layer tree,
+        # we must insert the clones FIRST before removing the original nodes.
+        clones = [c.clone() for c in sorted_children]
+        
+        # Append the sorted clones to the end of the group
+        for c in clones:
+            current_node.addChildNode(c)
+            
+        # Safely remove the original unsorted nodes from the beginning
+        # Map layers are preserved because the clones now hold tree references
+        for child in children:
+            current_node.removeChildNode(child)
+
+        self.iface.messageBar().pushMessage(
+            "Sort Group",
+            f"Sorted {len(clones)} items alphabetically.",
+            Qgis.Success,
+            2,
+        )
 
     def _on_layers_added(self, layers):
         """Automatically apply style when layers are added to the project."""

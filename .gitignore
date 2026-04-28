@@ -13,3 +13,4 @@ ruff_errors.*
 
 # AI Tools
 .continueignore
+.history/

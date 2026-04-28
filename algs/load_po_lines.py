@@ -323,7 +323,10 @@ def save_layer_to_shapefile(layer, output_path, feedback=None):
     options = QgsVectorFileWriter.SaveVectorOptions()
     options.driverName = "ESRI Shapefile"
     options.fileEncoding = "UTF-8"
-    ret, msg = QgsVectorFileWriter.writeAsVectorFormat(layer, output_path, options)
+    context = QgsProject.instance().transformContext()
+    res = QgsVectorFileWriter.writeAsVectorFormatV3(layer, output_path, context, options)
+    ret = res[0]
+    msg = res[1] if len(res) > 1 else ""
     return ret == QgsVectorFileWriter.NoError, msg
 
 
@@ -386,7 +389,6 @@ class PreviewDialog(QDialog):
 
         # Add Layer Section
         from qgis.PyQt.QtWidgets import QComboBox
-
         add_lyt = QHBoxLayout()
         self.add_combo = QComboBox()
         btn_add = QPushButton("Add to List")
@@ -575,26 +577,29 @@ class LoadPOLinesAlgorithm(QgsProcessingAlgorithm):
             feedback.pushInfo("No files selected.")
             return {}
 
-        # 3. Scan for existing files and handle overwrite logic
-        all_qp_paths = []
-        existing_names = []
+        # 3. Group by unique PO paths to avoid duplicate processing
+        unique_po_paths = {}
         for rf in latest_files:
             try:
                 po_p = derive_poline_path_from_raster(rf, _guess_suffix(rf))
                 if os.path.exists(po_p):
-                    qp_p = os.path.join(
-                        os.path.dirname(po_p),
-                        os.path.splitext(os.path.basename(po_p))[0] + "_QP.shp",
-                    )
-                    all_qp_paths.append(qp_p)
-                    if os.path.exists(qp_p):
-                        existing_names.append(os.path.basename(qp_p))
+                    if po_p not in unique_po_paths:
+                        unique_po_paths[po_p] = rf
             except Exception:
                 continue
 
+        existing_names = set()
+        for po_p in unique_po_paths:
+            qp_p = os.path.join(
+                os.path.dirname(po_p),
+                os.path.splitext(os.path.basename(po_p))[0] + "_QP.shp",
+            )
+            if os.path.exists(qp_p):
+                existing_names.add(os.path.basename(qp_p))
+
         mode = "skip"
         if existing_names:
-            ov_dlg = FileOverwriteDialog(existing_names, iface.mainWindow())
+            ov_dlg = FileOverwriteDialog(sorted(list(existing_names)), iface.mainWindow())
             if ov_dlg.exec_() != QDialog.Accepted:
                 feedback.pushInfo("Operation cancelled by user")
                 return {}
@@ -603,23 +608,15 @@ class LoadPOLinesAlgorithm(QgsProcessingAlgorithm):
 
         # 4. Process and generate QP files with progress reporting
         loaded_results = []
-        total_files = len(latest_files)
-        for idx, rf in enumerate(latest_files):
+        unique_pos = list(unique_po_paths.keys())
+        total_files = len(unique_pos)
+        for idx, po_p in enumerate(unique_pos):
             progress = int((idx / total_files * 100)) if total_files > 0 else 0
             feedback.setProgress(progress)
+            rf_for_log = unique_po_paths[po_p]
             feedback.pushInfo(
-                f"[{idx + 1}/{total_files}] Processing: {os.path.basename(rf)}"
+                f"[{idx + 1}/{total_files}] Processing PO line for: {os.path.basename(rf_for_log)}"
             )
-
-            try:
-                po_p = derive_poline_path_from_raster(rf, _guess_suffix(rf))
-            except Exception:
-                feedback.pushInfo("  ⚠ Could not derive PO path (pattern mismatch)")
-                continue
-
-            if not os.path.exists(po_p):
-                feedback.pushInfo("  ⚠ PO file not found")
-                continue
 
             qp_p = os.path.join(
                 os.path.dirname(po_p),
