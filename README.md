@@ -191,7 +191,7 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
 ## 👤 Author
 
 **Dr. Hao Wu**  
-🐙 [@haownz](https://github.com/haownz)
+🏠 [wuhao.site](https://v.wuhao.site/) · 🐙 [@haownz](https://github.com/haownz)
 
 ---
 
