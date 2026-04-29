@@ -109,8 +109,10 @@ class TuflowToolsPlugin(QObject):
         self.toolbar.addAction(self.duplicate_layer_action)
 
         # Add Collapse All Sub-layers button
+        icon_collapse_path = os.path.join(os.path.dirname(__file__), "icon_collapse.png")
+        icon_collapse = QIcon(icon_collapse_path) if os.path.exists(icon_collapse_path) else QIcon()
         self.collapse_action = QAction(
-            QgsApplication.getThemeIcon("/mActionArrowDown.svg"),
+            icon_collapse,
             "Collapse All Sub-layers",
             self.iface.mainWindow(),
         )
@@ -119,8 +121,10 @@ class TuflowToolsPlugin(QObject):
         self.toolbar.addAction(self.collapse_action)
 
         # Add Sort Group button
+        icon_sort_path = os.path.join(os.path.dirname(__file__), "icon_sort.png")
+        icon_sort = QIcon(icon_sort_path) if os.path.exists(icon_sort_path) else QIcon()
         self.sort_group_action = QAction(
-            QgsApplication.getThemeIcon("/mActionArrowUp.svg"),
+            icon_sort,
             "Sort Group",
             self.iface.mainWindow(),
         )
@@ -270,6 +274,17 @@ class TuflowToolsPlugin(QObject):
         """Duplicate the active vector layer's data source and load it."""
         from qgis.PyQt.QtWidgets import QInputDialog, QMessageBox
         from qgis.core import QgsVectorFileWriter, QgsProject, QgsVectorLayer, Qgis
+        import re
+
+        def get_default_name(current_name):
+            match = re.search(r'(\d+)([^0-9]*)$', current_name)
+            if match:
+                num_str = match.group(1)
+                suffix = match.group(2)
+                prefix = current_name[:match.start(1)]
+                next_num = int(num_str) + 1
+                return f"{prefix}{next_num:0{len(num_str)}d}{suffix}"
+            return f"{current_name}_copy"
 
         layer = self.iface.activeLayer()
         if not layer or layer.type() != Qgis.LayerType.VectorLayer:
@@ -309,12 +324,24 @@ class TuflowToolsPlugin(QObject):
                 self.iface.mainWindow(),
                 "Duplicate Layer Data",
                 "Enter new table name for GeoPackage:",
-                text=f"{layer.name()}_copy",
+                text=get_default_name(layer.name()),
             )
             if not ok or not new_name.strip():
                 return
 
             new_name = new_name.strip()
+
+            # Check if table already exists in GPKG
+            check_layer = QgsVectorLayer(f"{file_path}|layername={new_name}", "check", "ogr")
+            if check_layer.isValid():
+                ans = QMessageBox.question(
+                    self.iface.mainWindow(),
+                    "Table Exists",
+                    f"The table '{new_name}' already exists in the GeoPackage. Overwrite?",
+                    QMessageBox.Yes | QMessageBox.No,
+                )
+                if ans == QMessageBox.No:
+                    return
 
             # To avoid slow performance on NAS due to SQLite concurrent read/write locks,
             # we first export to a temporary local file, then append it to the target gpkg.
@@ -385,7 +412,7 @@ class TuflowToolsPlugin(QObject):
                     4,
                 )
 
-        else:
+        elif ext == ".shp":
             # Prompt for new file name
             base_dir = os.path.dirname(file_path)
             base_name = os.path.basename(file_path)
@@ -395,7 +422,7 @@ class TuflowToolsPlugin(QObject):
                 self.iface.mainWindow(),
                 "Duplicate Layer Data",
                 f"Enter new file name (without {current_ext} extension):",
-                text=f"{name_only}_copy",
+                text=get_default_name(name_only),
             )
 
             if not ok or not new_name.strip():
@@ -415,6 +442,8 @@ class TuflowToolsPlugin(QObject):
                     return
 
             options = QgsVectorFileWriter.SaveVectorOptions()
+            options.driverName = "ESRI Shapefile"
+            options.actionOnExistingFile = QgsVectorFileWriter.CreateOrOverwriteFile
             if hasattr(layer.dataProvider(), "encoding"):
                 options.fileEncoding = layer.dataProvider().encoding()
 
@@ -447,6 +476,14 @@ class TuflowToolsPlugin(QObject):
                     Qgis.Critical,
                     4,
                 )
+
+        else:
+            self.iface.messageBar().pushMessage(
+                "Duplicate Layer",
+                f"Unsupported file format '{ext}'. Only GPKG and SHP are supported.",
+                Qgis.Warning,
+                4,
+            )
 
     def collapse_all_sub_items(self):
         """Collapse all sub-layers and sub-groups of the selected item in the Layers panel."""
