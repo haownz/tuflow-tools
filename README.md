@@ -130,10 +130,6 @@ Or search for any tool by name in the Processing Toolbox search bar.
 - **Extract Field Across Layers**: Pull specific field values from multiple vector layers.
 - **Quick Access Buttons**: Dedicated ribbon buttons for Batch Theme Export and Layer Sorting.
 
-#### Improvements
-- **UI Enhancements**: Added highlighting for selected tasks and improved progress feedback.
-- **Code Cleanup**: Removed obsolete scripts and optimized algorithm registration.
-
 ### Version 1.5.0 (2026-04-09)
 #### New Features
 - **Batch Theme PDF Export**: Batch export QGIS print layouts to PDF by iterating through map themes.
