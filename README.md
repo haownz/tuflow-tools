@@ -7,7 +7,7 @@
 **A comprehensive QGIS plugin for TUFLOW hydraulic modelling — pre-processing, post-processing, and analysis.**
 
 [![QGIS](https://img.shields.io/badge/QGIS-3.22%2B-green?logo=qgis)](https://qgis.org)
-[![Version](https://img.shields.io/badge/version-1.6.0-blue)](https://github.com/haownz/tuflow-tools/releases)
+[![Version](https://img.shields.io/badge/version-1.6.1-blue)](https://github.com/haownz/tuflow-tools/releases)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-informational)]()
 
@@ -56,7 +56,6 @@
 | **Depth Discharge Curve** | Build composite Q–H curves (orifice, weir, pipe capacity) with interactive plotting and CSV export |
 | **Merge Rasters** | Merge multiple raster files together seamlessly |
 | **Land Cover Add Fields** | Add TUFLOW-specific material and soil fields to land cover layers |
-| **Process Land Cover** | Clip, process, and merge land cover data from geodatabases for TUFLOW input |
 | **GIS Location** | Utilities for spatial referencing and coordinate location |
 | **Append Features** | Merge features between vector layers |
 | **Extract Field Across Layers** | Pull specific field values from multiple vector layers simultaneously |

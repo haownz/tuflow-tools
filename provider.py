@@ -22,7 +22,6 @@ from .algs.load_profile_sections import LoadProfileSectionsAlgorithm
 from .algs.cross_section_alignment import CrossSectionAlignmentAlgorithm
 from .algs.time_of_concentration import TimeOfConcentrationAlgorithm
 from .algs.gis_location import GISLocationAlgorithm
-from .algs.process_landcover import ProcessLandcoverAlgorithm
 from .algs.wse_comparison import WSEComparisonAlgorithm
 from .algs.lc_add_fields import LandCoverAddFieldsAlgorithm
 from .algs.inundation_boundary import InundationBoundaryAlgorithm
@@ -68,7 +67,6 @@ class TuflowProcessingProvider(QgsProcessingProvider):
         self.addAlgorithm(
             LandCoverAddFieldsAlgorithm()
         )  # add specialized fields to land cover
-        self.addAlgorithm(ProcessLandcoverAlgorithm())  # process land cover layer
         self.addAlgorithm(LoadGridOutputAlgorithm())  # load TUFLOW grid output wizard
         self.addAlgorithm(LoadPOLinesAlgorithm())  # load TUFLOW PO line output
         self.addAlgorithm(

@@ -1,5 +1,10 @@
 # Changelog
 
+## Version 1.6.1 (2026-05-05)
+### Improvements
+- **Refined Style Auto-Apply**: Changed auto-apply style logic to only trigger once per layer using a persistent project property. This prevents manual style changes from being overwritten during project reloads or layer refreshes.
+- **Algorithm Cleanup**: Removed the "Process Land Cover" algorithm as part of tool simplification, while retaining the "Land Cover Add Fields" utility.
+
 ## Version 1.6.0 (2026-04-29)
 ### New Features
 - **Plugin Settings Export/Import**: Added functionality to save and load plugin configurations to external JSON files.

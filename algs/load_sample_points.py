@@ -14,6 +14,9 @@ import gc
 import re
 import json
 import math
+
+# Project variable key used to persist DEM raster selection
+_DEM_STATE_VAR = "tuflow_tools_dem_raster_state"
 from qgis.PyQt.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -573,11 +576,39 @@ class LoadSamplePointsInputDialog(QDialog):
         if self.points_combo.count() > 0:
             self.points_combo.setCurrentIndex(selected_index)
 
-        # Populate terrain list (raster layers)
+        # Populate terrain list (raster layers) – restore previous selection/order
         self.terrain_list.clear()
-        for layer in project.mapLayers().values():
-            if isinstance(layer, QgsRasterLayer):
+        raster_layers = {
+            layer.name(): layer
+            for layer in project.mapLayers().values()
+            if isinstance(layer, QgsRasterLayer)
+        }
+
+        # Load saved state: list of {"name": str, "checked": bool}
+        saved_state = self._load_dem_state()
+        saved_names = [s["name"] for s in saved_state] if saved_state else []
+
+        # 1. Add layers that were previously saved (in saved order)
+        added = set()
+        for entry in saved_state:
+            name = entry["name"]
+            if name in raster_layers:
+                layer = raster_layers[name]
                 item = QListWidgetItem(layer.name())
+                item.setFlags(
+                    item.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsDragEnabled
+                )
+                item.setCheckState(
+                    Qt.Checked if entry.get("checked", False) else Qt.Unchecked
+                )
+                item.setData(Qt.UserRole, layer)
+                self.terrain_list.addItem(item)
+                added.add(name)
+
+        # 2. Append any new raster layers not in saved state (unchecked)
+        for name, layer in raster_layers.items():
+            if name not in added:
+                item = QListWidgetItem(name)
                 item.setFlags(
                     item.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsDragEnabled
                 )
@@ -637,6 +668,46 @@ class LoadSamplePointsInputDialog(QDialog):
         elif self.id_field_combo.count() > 0:
             self.id_field_combo.setCurrentIndex(0)
 
+    # ------------------------------------------------------------------
+    # DEM state persistence (project variable)
+    # ------------------------------------------------------------------
+
+    def _load_dem_state(self):
+        """Return list of {name, checked} dicts from the project variable, or []."""
+        try:
+            raw = QgsExpressionContextUtils.projectScope(
+                QgsProject.instance()
+            ).variable(_DEM_STATE_VAR)
+            if raw:
+                return json.loads(raw)
+        except Exception:
+            pass
+        return []
+
+    def _save_dem_state(self):
+        """Persist current terrain list order + checked state to a project variable."""
+        state = []
+        for i in range(self.terrain_list.count()):
+            item = self.terrain_list.item(i)
+            state.append(
+                {
+                    "name": item.text(),
+                    "checked": item.checkState() == Qt.Checked,
+                }
+            )
+        try:
+            project = QgsProject.instance()
+            was_dirty = project.isDirty()
+            QgsExpressionContextUtils.setProjectVariable(
+                project, _DEM_STATE_VAR, json.dumps(state)
+            )
+            if not was_dirty:
+                project.setDirty(False)
+        except Exception:
+            pass
+
+    # ------------------------------------------------------------------
+
     def get_selected_layers(self):
         """
         Retrieve selected layers and validate.
@@ -644,6 +715,9 @@ class LoadSamplePointsInputDialog(QDialog):
         """
         self.input_points_layer = self.points_combo.currentData()
         self.id_field_name = self.id_field_combo.currentText()
+
+        # Save DEM state before reading (captures current order + checks)
+        self._save_dem_state()
 
         self.terrain_layers = []
         for i in range(self.terrain_list.count()):

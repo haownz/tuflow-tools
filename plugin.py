@@ -36,6 +36,7 @@ class TuflowToolsPlugin(QObject):
         self.sort_group_action = None
         self.theme_manager_action = None
         self.batch_theme_export_action = None
+        self.select_layers_action = None
 
     def initGui(self):
         self.provider = TuflowProcessingProvider()
@@ -52,6 +53,18 @@ class TuflowToolsPlugin(QObject):
         self.style_action.setToolTip("Apply style to selected layers")
         self.style_action.triggered.connect(self.apply_style_to_selected)
         self.toolbar.addAction(self.style_action)
+
+        # Add Select Layers by Search button
+        self.select_layers_action = QAction(
+            QgsApplication.getThemeIcon("/mActionFilter2.svg"),
+            "Select Layers by Search",
+            self.iface.mainWindow(),
+        )
+        self.select_layers_action.setToolTip(
+            "Select layers by fuzzy search or wildcard pattern (e.g. 2d_bc* or *result*)"
+        )
+        self.select_layers_action.triggered.connect(self.run_select_layers_by_search)
+        self.toolbar.addAction(self.select_layers_action)
 
         # Add Batch Rename button
         self.rename_action = QAction(
@@ -218,6 +231,10 @@ class TuflowToolsPlugin(QObject):
 
         for layer in layers:
             StyleManager.apply_style_to_layer(layer)
+
+    def run_select_layers_by_search(self):
+        from .algs.select_layers_by_search import show_select_layers_dialog
+        show_select_layers_dialog(self.iface)
 
     def run_batch_rename(self):
         processing.execAlgorithmDialog("tuflow_tools:rename_layers_by_pattern")
@@ -602,7 +619,13 @@ class TuflowToolsPlugin(QObject):
             return
 
         for layer in layers:
+            # Only apply style once per layer to prevent overriding manual style 
+            # changes when the project is loaded or layer is refreshed.
+            if layer.customProperty("tuflow_auto_style_applied"):
+                continue
+
             StyleManager.apply_style_to_layer(layer)
+            layer.setCustomProperty("tuflow_auto_style_applied", True)
 
     def unload(self):
         try:
