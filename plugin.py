@@ -294,7 +294,7 @@ class TuflowToolsPlugin(QObject):
         import re
 
         def get_default_name(current_name):
-            match = re.search(r'(\d+)([^0-9]*)$', current_name)
+            match = re.search(r'(?<!\d)(\d{3})([^0-9]*)$', current_name)
             if match:
                 num_str = match.group(1)
                 suffix = match.group(2)

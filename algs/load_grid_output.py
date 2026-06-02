@@ -402,10 +402,10 @@ class ScenarioSelectionPage(QWizardPage):
 
         valid_struct = False
         for part in parts:
-            if re.match(r"~s\d+~", part):
+            if re.match(r"(?i)~s\d+~", part):
                 structure.append("S")
                 valid_struct = True
-            elif re.match(r"~e\d+~", part):
+            elif re.match(r"(?i)~e\d+~", part):
                 structure.append("E")
                 valid_struct = True
             else:
@@ -441,7 +441,8 @@ class ScenarioSelectionPage(QWizardPage):
             "h","d","v","q",
             "hr","max","tmax","min",
             "avg","dem","grid","tmax_h",
-            "znz2","zaem1","zud1"
+            "znz2","zaem1","zud1",
+            "dt","bss","ci","rfc","ir","mb1","mb2"
         }
 
         parts = filename_str.split("_")
@@ -475,23 +476,31 @@ class ScenarioSelectionPage(QWizardPage):
                     events.add(match_found)
                     p_idx += best_len
                 else:
-                    # If expected event not found, treat token as orphan scenario and move on
+                    # Expected event not found in list, fallback to single part
                     if parts[p_idx] and parts[p_idx].lower() not in ignored_keywords:
-                        scenarios.add(parts[p_idx])
+                        events.add(parts[p_idx])
                     p_idx += 1
 
             elif isinstance(slot, tuple) and slot[0] == "L":
                 expected = slot[1]
                 # Look ahead for this constant; any skipped tokens are scenarios
                 found_at = -1
+                # Try exact match first
                 for lookahead in range(p_idx, len(parts)):
                     if parts[lookahead].lower() == expected.lower():
                         found_at = lookahead
                         break
+                
+                # If no exact match, try regex match for version/numbers
+                if found_at == -1 and re.fullmatch(r"v?\d+[a-z]?", expected, re.IGNORECASE):
+                    for lookahead in range(p_idx, len(parts)):
+                        if re.fullmatch(r"v?\d+[a-z]?", parts[lookahead], re.IGNORECASE):
+                            found_at = lookahead
+                            break
 
                 if found_at != -1:
                     for i in range(p_idx, found_at):
-                        if parts[i] and parts[i] not in ignored_keywords:
+                        if parts[i] and parts[i].lower() not in ignored_keywords:
                             scenarios.add(parts[i])
                     p_idx = found_at + 1
                 else:
