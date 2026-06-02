@@ -7,7 +7,7 @@
 **A comprehensive QGIS plugin for TUFLOW hydraulic modelling — pre-processing, post-processing, and analysis.**
 
 [![QGIS](https://img.shields.io/badge/QGIS-3.22%2B-green?logo=qgis)](https://qgis.org)
-[![Version](https://img.shields.io/badge/version-1.6.1-blue)](https://github.com/haownz/tuflow-tools/releases)
+[![Version](https://img.shields.io/badge/version-1.6.2-blue)](https://github.com/haownz/tuflow-tools/releases)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-informational)]()
 
@@ -120,6 +120,13 @@ Or search for any tool by name in the Processing Toolbox search bar.
 ---
 
 ## 📋 Changelog
+
+### Version 1.6.2 (2026-06-03)
+#### New Features
+- **Batch Theme PDF Export Atlas Support**: Added QGIS Layout Atlas support to theme-based PDF exports, enabling export loops for layout features.
+
+#### Improvements
+- **Improved Load Grid Output Algorithm**: Correctly recognizes events and version numbers from TCF filenames; allows flexible version number variations between TCF and TIF outputs.
 
 ### Version 1.6.1 (2026-05-05)
 #### Improvements

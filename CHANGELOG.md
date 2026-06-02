@@ -1,5 +1,17 @@
 # Changelog
 
+## Version 1.6.2 (2026-06-03)
+### New Features
+- **Batch Theme PDF Export Atlas Support**: Added QGIS Layout Atlas support to theme-based PDF exports, enabling export loops for layout features.
+
+### Improvements
+- **Improved Load Grid Output Algorithm**: 
+  - Correctly recognizes events and version numbers from TCF filenames.
+  - Allows flexible numeric version variations (e.g., `002` matching `001.tcf`) between TCF and TIF outputs.
+  - Ensures unrecognized events are not wrongly mapped as scenarios.
+  - Added case-insensitivity to TCF wildcard matching.
+  - Added more default output data type keywords (`dt`, `bss`, `ci`, `rfc`, etc.) to the ignored list to prevent them from being mapped as scenarios.
+
 ## Version 1.6.1 (2026-05-05)
 ### Improvements
 - **Refined Style Auto-Apply**: Changed auto-apply style logic to only trigger once per layer using a persistent project property. This prevents manual style changes from being overwritten during project reloads or layer refreshes.

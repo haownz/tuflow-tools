@@ -1,7 +1,7 @@
 [general]
 name=TUFLOW Tools
 description=Comprehensive analysis tools for TUFLOW hydraulic modeling results
-version=1.6.1
+version=1.6.2
 qgisMinimumVersion=3.22
 qgisMaximumVersion=3.99
 author=Dr. Hao Wu
@@ -15,7 +15,7 @@ repository=https://github.com/haownz/tuflow-tools
 tags=TUFLOW,hydraulic,modeling,flood,analysis,raster,vector,post-processing     
 experimental=False
 deprecated=False
-changelog=Version 1.6.1 (2026-05-05): Refined auto-apply style logic and removed land cover processing tool.
+changelog=Version 1.6.2 (2026-06-03): Improved Load Grid Output algorithm for event/version recognition; added atlas support to batch theme PDF export.
 
 [requirements]
 python_requires=>=3.8
