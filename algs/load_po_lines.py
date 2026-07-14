@@ -323,7 +323,10 @@ def save_layer_to_shapefile(layer, output_path, feedback=None):
     options = QgsVectorFileWriter.SaveVectorOptions()
     options.driverName = "ESRI Shapefile"
     options.fileEncoding = "UTF-8"
-    ret, msg = QgsVectorFileWriter.writeAsVectorFormat(layer, output_path, options)
+    context = QgsProject.instance().transformContext()
+    res = QgsVectorFileWriter.writeAsVectorFormatV3(layer, output_path, context, options)
+    ret = res[0]
+    msg = res[1] if len(res) > 1 else ""
     return ret == QgsVectorFileWriter.NoError, msg
 
 
@@ -386,7 +389,6 @@ class PreviewDialog(QDialog):
 
         # Add Layer Section
         from qgis.PyQt.QtWidgets import QComboBox
-
         add_lyt = QHBoxLayout()
         self.add_combo = QComboBox()
         btn_add = QPushButton("Add to List")

@@ -364,9 +364,12 @@ def save_layer_to_shapefile(layer, output_path, feedback=None, overwrite_mode="s
         options.driverName = "ESRI Shapefile"
         options.fileEncoding = "UTF-8"
 
-        error_code, error_msg = QgsVectorFileWriter.writeAsVectorFormat(
-            layer, output_path, options
+        context = QgsProject.instance().transformContext()
+        res = QgsVectorFileWriter.writeAsVectorFormatV3(
+            layer, output_path, context, options
         )
+        error_code = res[0]
+        error_msg = res[1] if len(res) > 1 else ""
 
         if error_code == QgsVectorFileWriter.WriterError.NoError:
             if feedback:

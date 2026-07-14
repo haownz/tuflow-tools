@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-TUFLOW tools — Flow (Q) Plot Viewer (Enhanced multi-layer support)
+TUFLOW tools — Flow Plot Viewer (Enhanced multi-layer support)
 
 IMPROVEMENTS:
 - Layer Management Table: Select which vector layers (PO Lines) to include in the plot
@@ -72,7 +72,7 @@ _DEFAULT_COLORS = [
 
 class TimeSeriesPlotWindow(QDialog):
     """
-    TUFLOW tools — Flow (Q) Plot Viewer.
+    TUFLOW tools — Flow Plot Viewer.
     Auto-scans selected features across all vector layers and overlays their Q time series.
     """
 
@@ -90,7 +90,7 @@ class TimeSeriesPlotWindow(QDialog):
         q_headers_1d: Optional[List[str]] = None,
     ):
         super().__init__(parent)
-        self.setWindowTitle("TUFLOW tools — Flow (Q) Plot Viewer")
+        self.setWindowTitle("TUFLOW tools — Flow Plot Viewer")
         self.resize(1200, 900)  # Increased height for better space
 
         # Inputs (initial)
@@ -210,6 +210,11 @@ class TimeSeriesPlotWindow(QDialog):
 
         # Last plot payloads (one dict per series) for redraw
         self._last_plot_payloads: List[Dict[str, object]] = []
+
+        # Hover annotation structures
+        self._hover_lines = []
+        self._annot = None
+        self._canvas.mpl_connect("motion_notify_event", self._on_plot_hover)
 
         # Load saved settings
         self._load_settings()
@@ -454,26 +459,38 @@ class TimeSeriesPlotWindow(QDialog):
     # --------------------- SETTINGS PERSISTENCE ---------------------
     def _load_settings(self):
         """
-        Load saved UI settings (Show Volume, Show Peaks toggle states).
+        Load saved UI settings (Show Volume, Show Peaks toggle states and layer list).
         """
         settings = QSettings("QGIS", "TUFLOW_Tools")
-        show_volume = settings.value("qplot/show_volume", True, type=bool)
-        show_peaks = settings.value("qplot/show_peaks", True, type=bool)
+        self._user_show_volume = settings.value("qplot/show_volume", True, type=bool)
+        self._user_show_peaks = settings.value("qplot/show_peaks", True, type=bool)
 
         self._chk_volume.blockSignals(True)
         self._chk_peak.blockSignals(True)
-        self._chk_volume.setChecked(show_volume)
-        self._chk_peak.setChecked(show_peaks)
+        self._chk_volume.setChecked(self._user_show_volume)
+        self._chk_peak.setChecked(self._user_show_peaks)
         self._chk_volume.blockSignals(False)
         self._chk_peak.blockSignals(False)
 
+        # Restore enabled layers
+        saved_layers = settings.value("qplot/layer_enabled", {}, type=dict)
+        if isinstance(saved_layers, dict):
+            # Only keep layers that still exist in the current project
+            self._layer_enabled = {}
+            for layer_id, enabled in saved_layers.items():
+                if QgsProject.instance().mapLayer(layer_id):
+                    self._layer_enabled[layer_id] = bool(enabled)
+        else:
+            self._layer_enabled = {}
+
     def _save_settings(self):
         """
-        Save UI settings (Show Volume, Show Peaks toggle states).
+        Save UI settings (Show Volume, Show Peaks toggle states and layer list).
         """
         settings = QSettings("QGIS", "TUFLOW_Tools")
-        settings.setValue("qplot/show_volume", self._chk_volume.isChecked())
-        settings.setValue("qplot/show_peaks", self._chk_peak.isChecked())
+        settings.setValue("qplot/show_volume", getattr(self, "_user_show_volume", True))
+        settings.setValue("qplot/show_peaks", getattr(self, "_user_show_peaks", True))
+        settings.setValue("qplot/layer_enabled", self._layer_enabled)
 
     # --------------------- ACTIVE LAYER CHANGE ---------------------
     def _on_current_layer_changed(self, new_layer: Optional[QgsMapLayer]):
@@ -598,6 +615,7 @@ class TimeSeriesPlotWindow(QDialog):
                     selected_ids[id_val] = map_layer
 
         if not selected_ids:
+            self._refresh_layer_table()
             try:
                 self._last_plot_payloads = payloads
                 self._draw_plot()
@@ -701,17 +719,17 @@ class TimeSeriesPlotWindow(QDialog):
                 chk.setChecked(False)
                 chk.setEnabled(False)
                 chk.blockSignals(False)
-        elif n_series == 1:
-            # Enable & turn ON both toggles
-            for chk in (self._chk_volume, self._chk_peak):
-                chk.blockSignals(True)
-                chk.setEnabled(True)
-                chk.setChecked(True)
-                chk.blockSignals(False)
         else:
-            # No series → allow toggles but keep state; show empty later
-            for chk in (self._chk_volume, self._chk_peak):
-                chk.setEnabled(True)
+            # Enable & restore user preferred state for both toggles
+            self._chk_volume.blockSignals(True)
+            self._chk_volume.setEnabled(True)
+            self._chk_volume.setChecked(getattr(self, "_user_show_volume", True))
+            self._chk_volume.blockSignals(False)
+
+            self._chk_peak.blockSignals(True)
+            self._chk_peak.setEnabled(True)
+            self._chk_peak.setChecked(getattr(self, "_user_show_peaks", True))
+            self._chk_peak.blockSignals(False)
 
         # Update layer table with metrics
         self._refresh_layer_table()
@@ -736,6 +754,12 @@ class TimeSeriesPlotWindow(QDialog):
         Redraw when the user toggles volume or peaks.
         In multi-series mode, toggles are disabled+OFF via _refresh_plot.
         """
+        sender = self.sender()
+        if sender == self._chk_volume:
+            self._user_show_volume = self._chk_volume.isChecked()
+        elif sender == self._chk_peak:
+            self._user_show_peaks = self._chk_peak.isChecked()
+
         if not self._last_plot_payloads:
             self._show_empty("Select features with 'ID' in vector layers")
             return
@@ -762,6 +786,7 @@ class TimeSeriesPlotWindow(QDialog):
         self._remove_secondary_axis()
 
         handles, labels = [], []
+        self._hover_lines = []
 
         for p in payloads:
             t_vals = p["t_vals"]
@@ -783,8 +808,9 @@ class TimeSeriesPlotWindow(QDialog):
             # ------------------------
 
             line = self._ax.plot(
-                t_vals, q_vals, color=color, linewidth=1.8, label=legend_label
+                t_vals, q_vals, color=color, linewidth=1.8, label=legend_label, picker=5
             )[0]
+            self._hover_lines.append((line, legend_label))
 
             # Peak markers/annotations ONLY if peaks toggle is ON
             if self._chk_peak.isChecked():
@@ -814,7 +840,7 @@ class TimeSeriesPlotWindow(QDialog):
         # Axes labels/title/grid
         self._ax.set_xlabel("Time (h)")
         self._ax.set_ylabel("Flow (m³/s)")
-        self._ax.set_title("Flow (Q) time series")
+        self._ax.set_title("Flow time series")
         self._ax.grid(True, alpha=0.4)
 
         # Tight axes margins
@@ -861,15 +887,90 @@ class TimeSeriesPlotWindow(QDialog):
             fontsize=8,
         )
 
+        # Recreate hover annotation
+        self._annot = self._ax.annotate(
+            "",
+            xy=(0, 0),
+            xytext=(10, 10),
+            textcoords="offset points",
+            bbox=dict(boxstyle="round", fc="white", alpha=0.9, ec="gray", linewidth=1.5),
+            fontsize=9,
+            zorder=10,
+            multialignment="left",
+            linespacing=1.5,
+        )
+        self._annot.set_visible(False)
+
         # Draw
         self._canvas.draw_idle()
 
         # Clear bottom info (no info text display)
         self._hint.setText("")
 
+    def _on_plot_hover(self, event):
+        """Handle mouse hover on plot curves to show legend name in tooltip."""
+        if not self._ax or not getattr(self, "_annot", None):
+            return
+
+        vis = self._annot.get_visible()
+        if event.inaxes == self._ax:
+            for line, label in self._hover_lines:
+                cont, ind = line.contains(event)
+                if cont:
+                    # Text up to 30 characters (including punctuations and symbols)
+                    label_text = label[:30] + "..." if len(label) > 30 else label
+                    
+                    # Get the closest data point coordinates on the curve
+                    xdata, ydata = line.get_data()
+                    ind_val = ind["ind"][0]  # first index matching the event
+                    hover_x = xdata[ind_val]
+                    hover_y = ydata[ind_val]
+                    
+                    text = f"{label_text}\nTime: {hover_x:.2f} h\nFlow: {hover_y:.3f} m³/s"
+                    
+                    self._annot.xy = (event.xdata, event.ydata)
+                    self._annot.set_text(text)
+                    self._annot.get_bbox_patch().set_edgecolor(line.get_color())
+                    self._annot.get_bbox_patch().set_alpha(0.9)
+                    self._annot.get_bbox_patch().set_linewidth(2)
+                    
+                    # Avoid boundary collision
+                    xlim = self._ax.get_xlim()
+                    ylim = self._ax.get_ylim()
+                    x_mid = (xlim[0] + xlim[1]) / 2
+                    y_mid = (ylim[0] + ylim[1]) / 2
+                    
+                    if event.xdata > x_mid:
+                        ha = "right"
+                        offset_x = -10
+                    else:
+                        ha = "left"
+                        offset_x = 10
+                        
+                    if event.ydata > y_mid:
+                        va = "top"
+                        offset_y = -10
+                    else:
+                        va = "bottom"
+                        offset_y = 10
+                        
+                    self._annot.set_position((offset_x, offset_y))
+                    self._annot.set_horizontalalignment(ha)
+                    self._annot.set_verticalalignment(va)
+                    
+                    self._annot.set_visible(True)
+                    self._canvas.draw_idle()
+                    return
+
+            if vis:
+                self._annot.set_visible(False)
+                self._canvas.draw_idle()
+
     def _show_empty(self, title: str):
         self._ax.clear()
         self._remove_secondary_axis()
+        self._hover_lines = []
+        self._annot = None
         self._ax.set_title(title)
         self._ax.set_xlabel("Time (h)")
         self._ax.set_ylabel("Flow (m³/s)")

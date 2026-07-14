@@ -138,22 +138,25 @@ def secs_to_hhmmss(value):
 
 def _find_latest_tsf(dir_path):
     """
-    Return the path of the most recently modified *.tsf file in dir_path.
+    Return the path of the most recently created *.tsf file in dir_path.
+    Uses creation time (ctime) instead of modification time (mtime) to handle 
+    situations where multiple simulations are running simultaneously, preventing 
+    the monitor from rapidly jumping between them.
     None if none exist or dir not accessible.
     """
     try:
         if not os.path.isdir(dir_path):
             return None
         latest = None
-        latest_mtime = -1
+        latest_ctime = -1
         # Non-recursive scan to keep it snappy on network shares
         for name in os.listdir(dir_path):
             if name.lower().endswith(".tsf"):
                 full = os.path.join(dir_path, name)
                 try:
-                    mtime = os.path.getmtime(full)
-                    if mtime > latest_mtime:
-                        latest_mtime = mtime
+                    ctime = os.path.getctime(full)
+                    if ctime > latest_ctime:
+                        latest_ctime = ctime
                         latest = full
                 except Exception:
                     pass
@@ -279,16 +282,12 @@ class TuflowMonitorWidget(QDialog):
         # Folder + scenario info
         info = QFormLayout()
         self.lbl_dir = QLabel(self.dir_path or "—")
-        scenario_name = (
-            os.path.splitext(os.path.basename(self.log_path))[0]
-            if self.log_path
-            else "—"
-        )
-        self.lbl_scenario = QLabel(scenario_name)
-        self.lbl_scenario.setStyleSheet(
-            "color: #455a64; font-weight: 600;"
-        )  # blue-grey
-        info.addRow("Current Scenario:", self.lbl_scenario)
+        
+        self.cmb_scenario = QComboBox()
+        self.cmb_scenario.setStyleSheet("color: #455a64; font-weight: 600;")
+        self.cmb_scenario.currentIndexChanged.connect(self._on_scenario_changed)
+        
+        info.addRow("Current Scenario:", self.cmb_scenario)
         main.addLayout(info)
 
         # Top row: core status
@@ -391,6 +390,7 @@ class TuflowMonitorWidget(QDialog):
         self.timer.start()
 
         # Initial update
+        self._refresh_scenario_combo()
         self.update_once()
 
     def _open_path(self, path):
@@ -444,6 +444,61 @@ class TuflowMonitorWidget(QDialog):
             )
         self.progress.setStyleSheet(style)
 
+    def _refresh_scenario_combo(self):
+        """Populate the scenario combobox with all .tsf files in the dir."""
+        if not self.dir_path or not os.path.isdir(self.dir_path):
+            return
+            
+        current = self.cmb_scenario.currentData()
+        if not current and self.log_path:
+            current = self.log_path
+            
+        self.cmb_scenario.blockSignals(True)
+        self.cmb_scenario.clear()
+        
+        # Gather all .tsf files, sorted by creation time (newest first)
+        tsf_files = []
+        for name in os.listdir(self.dir_path):
+            if name.lower().endswith(".tsf"):
+                full = os.path.join(self.dir_path, name)
+                try:
+                    ctime = os.path.getctime(full)
+                    tsf_files.append((ctime, name, full))
+                except Exception:
+                    pass
+                    
+        tsf_files.sort(key=lambda x: x[0], reverse=True)
+        
+        idx_to_select = 0
+        for i, (ctime, name, full) in enumerate(tsf_files):
+            scenario_name = os.path.splitext(name)[0]
+            self.cmb_scenario.addItem(scenario_name, full)
+            if current and full == current:
+                idx_to_select = i
+                
+        if self.cmb_scenario.count() > 0:
+            self.cmb_scenario.setCurrentIndex(idx_to_select)
+            
+        self.cmb_scenario.blockSignals(False)
+
+    def _on_scenario_changed(self, index):
+        """Handle manual scenario selection."""
+        if index < 0:
+            return
+        new_path = self.cmb_scenario.itemData(index)
+        if new_path and new_path != self.log_path:
+            self.log_path = new_path
+            self.tlf_path = _corresponding_tlf(self.log_path)
+            self.tail.clear()
+            QgsMessageLog.logMessage(
+                f"TUFLOW Monitor: user switched to {self.log_path}",
+                "TUFLOW Monitor",
+                Qgis.Info,
+            )
+            # Disable 'follow latest' so it doesn't immediately snap away
+            self.follow_latest = False
+            self.update_once()
+
     def _maybe_switch_latest(self):
         if (
             not self.follow_latest
@@ -455,9 +510,8 @@ class TuflowMonitorWidget(QDialog):
         if latest and latest != self.log_path:
             self.log_path = latest
             self.tlf_path = _corresponding_tlf(self.log_path)
-            scenario_name = os.path.splitext(os.path.basename(self.log_path))[0]
-            self._set(self.lbl_scenario, scenario_name)
             self.tail.clear()
+            self._refresh_scenario_combo()
             QgsMessageLog.logMessage(
                 f"TUFLOW Monitor: switched to latest {self.log_path}",
                 "TUFLOW Monitor",
