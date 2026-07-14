@@ -12,7 +12,7 @@ class BatchThemeExportDialog(QDialog):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Batch Export Layout by Map Themes")
-        self.resize(450, 500)
+        self.resize(640, 600)
         
         self.layout_manager = QgsProject.instance().layoutManager()
         self.theme_collection = QgsProject.instance().mapThemeCollection()
@@ -27,11 +27,13 @@ class BatchThemeExportDialog(QDialog):
         # 1. Layout Selector
         main_layout.addWidget(QLabel("1. Select Active Layout:"))
         self.combo_layouts = QComboBox()
+        self.combo_layouts.currentIndexChanged.connect(self._on_layout_changed)
         main_layout.addWidget(self.combo_layouts)
 
         # 2. Theme List Table (ListWidget with Checkboxes)
         main_layout.addWidget(QLabel("2. Select Map Themes to Export (Drag to reorder):"))
         self.list_themes = QListWidget()
+        self.list_themes.setSelectionMode(QListWidget.ExtendedSelection)
         self.list_themes.setDragDropMode(QListWidget.InternalMove)
         main_layout.addWidget(self.list_themes)
 
@@ -42,9 +44,17 @@ class BatchThemeExportDialog(QDialog):
         self.btn_clear_all.clicked.connect(self._clear_all_themes)
         self.btn_invert_selection = QPushButton("Invert Select")
         self.btn_invert_selection.clicked.connect(self._invert_selection)
+        
+        self.btn_check_selected = QPushButton("Check Selected")
+        self.btn_check_selected.clicked.connect(self._check_selected)
+        self.btn_uncheck_selected = QPushButton("Uncheck Selected")
+        self.btn_uncheck_selected.clicked.connect(self._uncheck_selected)
+
         theme_btn_layout.addWidget(self.btn_select_all)
         theme_btn_layout.addWidget(self.btn_clear_all)
         theme_btn_layout.addWidget(self.btn_invert_selection)
+        theme_btn_layout.addWidget(self.btn_check_selected)
+        theme_btn_layout.addWidget(self.btn_uncheck_selected)
         
         self.btn_move_top = QPushButton("Top")
         self.btn_move_top.clicked.connect(self._move_item_top)
@@ -65,6 +75,12 @@ class BatchThemeExportDialog(QDialog):
         dpi_layout.addWidget(self.spin_dpi)
         dpi_layout.addStretch()
         main_layout.addLayout(dpi_layout)
+
+        # Atlas Option
+        self.chk_export_atlas = QCheckBox("Export all atlas features")
+        self.chk_export_atlas.setChecked(False)
+        self.chk_export_atlas.setEnabled(False)
+        main_layout.addWidget(self.chk_export_atlas)
 
         # 4. Output File
         file_layout = QHBoxLayout()
@@ -92,6 +108,19 @@ class BatchThemeExportDialog(QDialog):
         self.btn_run.clicked.connect(self._run_export)
         main_layout.addWidget(self.btn_run)
 
+    def _on_layout_changed(self, index):
+        if index < 0:
+            self.chk_export_atlas.setEnabled(False)
+            self.chk_export_atlas.setChecked(False)
+            return
+        layout_name = self.combo_layouts.itemText(index)
+        layout = self.layout_manager.layoutByName(layout_name)
+        if layout and hasattr(layout, 'atlas') and layout.atlas().enabled():
+            self.chk_export_atlas.setEnabled(True)
+        else:
+            self.chk_export_atlas.setEnabled(False)
+            self.chk_export_atlas.setChecked(False)
+
     def _populate_data(self):
         # Populate Layouts
         layouts = self.layout_manager.printLayouts()
@@ -105,6 +134,8 @@ class BatchThemeExportDialog(QDialog):
             item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
             item.setCheckState(Qt.Unchecked)
             self.list_themes.addItem(item)
+            
+        self._on_layout_changed(self.combo_layouts.currentIndex())
 
     def refresh_data(self):
         # 1. Update Layouts
@@ -117,6 +148,8 @@ class BatchThemeExportDialog(QDialog):
         idx = self.combo_layouts.findText(current_layout)
         if idx >= 0:
             self.combo_layouts.setCurrentIndex(idx)
+        else:
+            self.combo_layouts.setCurrentIndex(0 if self.combo_layouts.count() > 0 else -1)
 
         # 2. Update Themes
         current_themes = self.theme_collection.mapThemes()
@@ -145,6 +178,8 @@ class BatchThemeExportDialog(QDialog):
                 item.setCheckState(Qt.Unchecked)
                 self.list_themes.addItem(item)
 
+        self._on_layout_changed(self.combo_layouts.currentIndex())
+
     def _browse_file(self):
         filename, _ = QFileDialog.getSaveFileName(self, "Save Combined PDF", "", "PDF Files (*.pdf)")
         if filename:
@@ -166,6 +201,14 @@ class BatchThemeExportDialog(QDialog):
             else:
                 item.setCheckState(Qt.Checked)
 
+    def _check_selected(self):
+        for item in self.list_themes.selectedItems():
+            item.setCheckState(Qt.Checked)
+
+    def _uncheck_selected(self):
+        for item in self.list_themes.selectedItems():
+            item.setCheckState(Qt.Unchecked)
+
     def _move_item_top(self):
         current_row = self.list_themes.currentRow()
         if current_row > 0:
@@ -186,6 +229,7 @@ class BatchThemeExportDialog(QDialog):
         settings.setValue("tuflow_tools/batch_export/dpi", self.spin_dpi.value())
         settings.setValue("tuflow_tools/batch_export/output_path", self.txt_filepath.text())
         settings.setValue("tuflow_tools/batch_export/auto_open", self.chk_auto_open.isChecked())
+        settings.setValue("tuflow_tools/batch_export/export_atlas", self.chk_export_atlas.isChecked())
 
         themes_state = []
         for i in range(self.list_themes.count()):
@@ -242,6 +286,10 @@ class BatchThemeExportDialog(QDialog):
                 item.setCheckState(Qt.Unchecked)
                 self.list_themes.addItem(item)
 
+        saved_export_atlas = settings.value("tuflow_tools/batch_export/export_atlas", False, type=bool)
+        if self.chk_export_atlas.isEnabled():
+            self.chk_export_atlas.setChecked(saved_export_atlas)
+
     def _run_export(self):
         # Validation
         layout_name = self.combo_layouts.currentText()
@@ -281,40 +329,97 @@ class BatchThemeExportDialog(QDialog):
         # Backup original theme to restore later
         original_themes = {map_item.uuid(): map_item.followVisibilityPresetName() for map_item in theme_map_items}
 
+        # Backup original atlas feature index if enabled
+        atlas = qgs_layout.atlas()
+        original_atlas_enabled = atlas.enabled()
+        original_atlas_feature = atlas.currentFeatureNumber() if original_atlas_enabled else 0
+
         # Setup Exporter
         exporter = QgsLayoutExporter(qgs_layout)
         pdf_settings = QgsLayoutExporter.PdfExportSettings()
         pdf_settings.dpi = self.spin_dpi.value()
 
         temp_pdfs = []
-        self.progress.setMaximum(len(selected_themes))
 
-        # Looping through selected themes
-        for index, theme in enumerate(selected_themes):
-            # Apply theme to targeted map items
-            for map_item in theme_map_items:
-                map_item.setFollowVisibilityPresetName(theme)
-                map_item.refresh()
-            
-            qgs_layout.refresh()
+        # Check if atlas should be exported and is enabled
+        export_atlas = self.chk_export_atlas.isChecked() and atlas.enabled()
 
-            # Export to temporary file
-            temp_file = os.path.join(tempfile.gettempdir(), f"temp_export_{index}.pdf")
-            result = exporter.exportToPdf(temp_file, pdf_settings)
+        if export_atlas:
+            total_steps = len(selected_themes) * atlas.count()
+            self.progress.setMaximum(total_steps)
+            step = 0
             
-            if result == QgsLayoutExporter.Success:
-                temp_pdfs.append((theme, temp_file))
-            else:
-                from qgis.utils import iface
-                from qgis.core import Qgis
-                iface.messageBar().pushMessage("Export Error", f"Failed to export theme: {theme}", level=Qgis.Warning, duration=5)
+            # Start atlas rendering
+            atlas.beginRender()
             
-            self.progress.setValue(index + 1)
+            for index, theme in enumerate(selected_themes):
+                # Apply theme to targeted map items
+                for map_item in theme_map_items:
+                    map_item.setFollowVisibilityPresetName(theme)
+                    map_item.refresh()
+                
+                # Loop through atlas features
+                for feat_idx in range(atlas.count()):
+                    atlas.seekTo(feat_idx)
+                    qgs_layout.refresh()
+                    
+                    temp_file = os.path.join(tempfile.gettempdir(), f"temp_export_{step}.pdf")
+                    result = exporter.exportToPdf(temp_file, pdf_settings)
+                    
+                    if result == QgsLayoutExporter.Success:
+                        feature_name = atlas.currentFilename()
+                        temp_pdfs.append((theme, feature_name, temp_file))
+                    else:
+                        from qgis.utils import iface
+                        from qgis.core import Qgis
+                        iface.messageBar().pushMessage(
+                            "Export Error", 
+                            f"Failed to export theme: {theme}, feature index: {feat_idx}", 
+                            level=Qgis.Warning, 
+                            duration=5
+                        )
+                    
+                    step += 1
+                    self.progress.setValue(step)
+            
+            atlas.endRender()
+        else:
+            self.progress.setMaximum(len(selected_themes))
+            for index, theme in enumerate(selected_themes):
+                # Apply theme to targeted map items
+                for map_item in theme_map_items:
+                    map_item.setFollowVisibilityPresetName(theme)
+                    map_item.refresh()
+                
+                qgs_layout.refresh()
+
+                # Export to temporary file
+                temp_file = os.path.join(tempfile.gettempdir(), f"temp_export_{index}.pdf")
+                result = exporter.exportToPdf(temp_file, pdf_settings)
+                
+                if result == QgsLayoutExporter.Success:
+                    temp_pdfs.append((theme, "", temp_file))
+                else:
+                    from qgis.utils import iface
+                    from qgis.core import Qgis
+                    iface.messageBar().pushMessage(
+                        "Export Error", 
+                        f"Failed to export theme: {theme}", 
+                        level=Qgis.Warning, 
+                        duration=5
+                    )
+                
+                self.progress.setValue(index + 1)
 
         # Restore original layout state
         for map_item in theme_map_items:
             map_item.setFollowVisibilityPresetName(original_themes[map_item.uuid()])
             map_item.refresh()
+
+        # Restore original atlas feature index
+        if original_atlas_enabled:
+            atlas.seekTo(original_atlas_feature)
+
         qgs_layout.refresh()
 
         # Combine PDFs
@@ -332,7 +437,7 @@ class BatchThemeExportDialog(QDialog):
             merger = PdfMerger()
             file_handles = []
             try:
-                for theme, pdf_path in temp_pdfs:
+                for theme, feature_name, pdf_path in temp_pdfs:
                     f = open(pdf_path, "rb")
                     file_handles.append(f)
                     merger.append(f)
@@ -348,7 +453,7 @@ class BatchThemeExportDialog(QDialog):
                         pass
             
             # Clean up temp files
-            for _, pdf_path in temp_pdfs:
+            for _, _, pdf_path in temp_pdfs:
                 if os.path.exists(pdf_path):
                     try:
                         os.remove(pdf_path)
@@ -372,9 +477,17 @@ class BatchThemeExportDialog(QDialog):
             base_dir = os.path.dirname(output_path)
             base_name = os.path.splitext(os.path.basename(output_path))[0]
             
-            for theme, pdf_path in temp_pdfs:
-                safe_theme_name = "".join([c for c in theme if c.isalpha() or c.isdigit() or c==' ']).rstrip()
-                new_path = os.path.join(base_dir, f"{base_name}_{safe_theme_name}.pdf")
+            for idx, (theme, feature_name, pdf_path) in enumerate(temp_pdfs):
+                safe_theme_name = "".join([c for c in theme if c.isalpha() or c.isdigit() or c==' ' or c=='-' or c=='_']).strip()
+                if not safe_theme_name:
+                    safe_theme_name = f"theme_{idx}"
+                if feature_name:
+                    safe_feature_name = "".join([c for c in feature_name if c.isalpha() or c.isdigit() or c==' ' or c=='-' or c=='_']).strip()
+                    if not safe_feature_name:
+                        safe_feature_name = f"feature_{idx}"
+                    new_path = os.path.join(base_dir, f"{base_name}_{safe_theme_name}_{safe_feature_name}.pdf")
+                else:
+                    new_path = os.path.join(base_dir, f"{base_name}_{safe_theme_name}.pdf")
                 os.rename(pdf_path, new_path)
                 
             from qgis.utils import iface
@@ -389,6 +502,17 @@ from qgis.core import QgsProcessingAlgorithm, QgsProcessingContext, QgsProcessin
 from qgis.PyQt.QtCore import QCoreApplication
 
 _batch_theme_export_dialog_instance = None
+
+def show_batch_theme_export_dialog():
+    global _batch_theme_export_dialog_instance
+    if _batch_theme_export_dialog_instance is None:
+        _batch_theme_export_dialog_instance = BatchThemeExportDialog()
+    else:
+        _batch_theme_export_dialog_instance.refresh_data()
+    
+    _batch_theme_export_dialog_instance.show()
+    _batch_theme_export_dialog_instance.raise_()
+    _batch_theme_export_dialog_instance.activateWindow()
 
 class BatchThemeExportAlgorithm(QgsProcessingAlgorithm):
     ALG_ID = "batch_theme_export"
@@ -421,13 +545,5 @@ class BatchThemeExportAlgorithm(QgsProcessingAlgorithm):
         pass
 
     def processAlgorithm(self, parameters, context: QgsProcessingContext, feedback: QgsProcessingFeedback):
-        global _batch_theme_export_dialog_instance
-        if _batch_theme_export_dialog_instance is None:
-            _batch_theme_export_dialog_instance = BatchThemeExportDialog()
-        else:
-            _batch_theme_export_dialog_instance.refresh_data()
-        
-        _batch_theme_export_dialog_instance.show()
-        _batch_theme_export_dialog_instance.raise_()
-        _batch_theme_export_dialog_instance.activateWindow()
+        show_batch_theme_export_dialog()
         return {}

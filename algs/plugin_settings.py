@@ -155,14 +155,22 @@ class PluginSettingsDialog(QDialog):
         remove_btn = QPushButton("Remove Row")
         move_up_btn = QPushButton("Move Up")
         move_down_btn = QPushButton("Move Down")
+        import_btn = QPushButton("Import")
+        export_btn = QPushButton("Export")
+        
         add_btn.clicked.connect(self.add_style_row)
         remove_btn.clicked.connect(self.remove_style_row)
         move_up_btn.clicked.connect(self.move_row_up)
         move_down_btn.clicked.connect(self.move_row_down)
+        import_btn.clicked.connect(self.import_style_mappings)
+        export_btn.clicked.connect(self.export_style_mappings)
+        
         table_btn_layout.addWidget(add_btn)
         table_btn_layout.addWidget(remove_btn)
         table_btn_layout.addWidget(move_up_btn)
         table_btn_layout.addWidget(move_down_btn)
+        table_btn_layout.addWidget(import_btn)
+        table_btn_layout.addWidget(export_btn)
         table_btn_layout.addStretch()
         layout.addLayout(table_btn_layout)
 
@@ -223,6 +231,89 @@ class PluginSettingsDialog(QDialog):
 
         self.style_table.setCellWidget(row1, 2, new_combo1)
         self.style_table.setCellWidget(row2, 2, new_combo2)
+
+    def import_style_mappings(self):
+        import json
+        from qgis.PyQt.QtWidgets import QMessageBox
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Import Style Mappings", "", "JSON Files (*.json);;All Files (*)"
+        )
+        if not file_path:
+            return
+
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                mappings = json.load(f)
+            
+            if not isinstance(mappings, list):
+                raise ValueError("Imported data is not a list of mappings.")
+            
+            reply = QMessageBox.question(
+                self,
+                "Import Mode",
+                "Do you want to clear existing mappings before importing?\n\nYes: Clear and replace\nNo: Append to existing",
+                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
+                QMessageBox.Yes
+            )
+            
+            if reply == QMessageBox.Cancel:
+                return
+                
+            if reply == QMessageBox.Yes:
+                self.style_table.setRowCount(0)
+            
+            for mapping in mappings:
+                if not (isinstance(mapping, list) and len(mapping) >= 3):
+                    continue
+                    
+                pattern, qml_file, layer_type = mapping[0], mapping[1], mapping[2]
+                
+                row = self.style_table.rowCount()
+                self.style_table.insertRow(row)
+                self.style_table.setItem(row, 0, QTableWidgetItem(str(pattern)))
+                self.style_table.setItem(row, 1, QTableWidgetItem(str(qml_file)))
+                
+                combo = QComboBox()
+                combo.addItems(["vector", "raster", "both"])
+                if layer_type in ["vector", "raster", "both"]:
+                    combo.setCurrentText(layer_type)
+                else:
+                    combo.setCurrentText("vector")
+                self.style_table.setCellWidget(row, 2, combo)
+                
+            QMessageBox.information(self, "Import Successful", f"Successfully imported {len(mappings)} style mappings.")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Import Error", f"Failed to import style mappings:\n{str(e)}")
+
+    def export_style_mappings(self):
+        import json
+        from qgis.PyQt.QtWidgets import QMessageBox
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Export Style Mappings", "style_mappings.json", "JSON Files (*.json);;All Files (*)"
+        )
+        if not file_path:
+            return
+            
+        mappings = []
+        for row in range(self.style_table.rowCount()):
+            pattern_item = self.style_table.item(row, 0)
+            qml_item = self.style_table.item(row, 1)
+            combo = self.style_table.cellWidget(row, 2)
+
+            if pattern_item and qml_item and combo:
+                pattern = pattern_item.text().strip()
+                qml_file = qml_item.text().strip()
+                layer_type = combo.currentText()
+                if pattern and qml_file:
+                    mappings.append([pattern, qml_file, layer_type])
+
+        try:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(mappings, f, indent=4)
+            QMessageBox.information(self, "Export Successful", f"Successfully exported {len(mappings)} style mappings.")
+        except Exception as e:
+            QMessageBox.critical(self, "Export Error", f"Failed to export style mappings:\n{str(e)}")
 
     def load_settings(self):
         # Load path mappings

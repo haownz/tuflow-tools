@@ -128,9 +128,9 @@ class TimeSeriesPlotWindow(QDialog):
         self._hint.setWordWrap(True)
 
         # ----- Layer management table -----
-        self._layer_table = QTableWidget(0, 5)
+        self._layer_table = QTableWidget(0, 7)
         self._layer_table.setHorizontalHeaderLabels(
-            ["Include", "Vector Layer (PO Lines)", "First ID", "Qp (m³/s)", "V (m³)"]
+            ["Include", "Vector Layer (PO Lines)", "First ID", "Qp (m³/s)", "V (m³)", "V+ (m³)", "V- (m³)"]
         )
         self._layer_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
         self._layer_table.setColumnWidth(0, 60)
@@ -145,6 +145,12 @@ class TimeSeriesPlotWindow(QDialog):
         )
         self._layer_table.horizontalHeader().setSectionResizeMode(
             4, QHeaderView.ResizeToContents
+        )
+        self._layer_table.horizontalHeader().setSectionResizeMode(
+            5, QHeaderView.ResizeToContents
+        )
+        self._layer_table.horizontalHeader().setSectionResizeMode(
+            6, QHeaderView.ResizeToContents
         )
         self._layer_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._layer_table.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -416,6 +422,8 @@ class TimeSeriesPlotWindow(QDialog):
                 first_id = metrics.get("first_id", "-")
                 peak_q = metrics.get("peak_q", "-")
                 total_vol = metrics.get("total_vol_m3", "-")
+                fwd_vol = metrics.get("fwd_vol_m3", "-")
+                rev_vol = metrics.get("rev_vol_m3", "-")
 
                 # First ID column
                 id_item = QTableWidgetItem(str(first_id))
@@ -439,6 +447,24 @@ class TimeSeriesPlotWindow(QDialog):
                 v_item = QTableWidgetItem(v_text)
                 v_item.setFlags(v_item.flags() & ~Qt.ItemIsEditable)
                 self._layer_table.setItem(row, 4, v_item)
+
+                # V+ column
+                if isinstance(fwd_vol, (int, float)):
+                    v_fwd_text = f"{fwd_vol:,.0f}"
+                else:
+                    v_fwd_text = str(fwd_vol)
+                v_fwd_item = QTableWidgetItem(v_fwd_text)
+                v_fwd_item.setFlags(v_fwd_item.flags() & ~Qt.ItemIsEditable)
+                self._layer_table.setItem(row, 5, v_fwd_item)
+
+                # V- column
+                if isinstance(rev_vol, (int, float)):
+                    v_rev_text = f"{rev_vol:,.0f}"
+                else:
+                    v_rev_text = str(rev_vol)
+                v_rev_item = QTableWidgetItem(v_rev_text)
+                v_rev_item.setFlags(v_rev_item.flags() & ~Qt.ItemIsEditable)
+                self._layer_table.setItem(row, 6, v_rev_item)
 
         self._layer_table.blockSignals(False)
 
@@ -681,7 +707,7 @@ class TimeSeriesPlotWindow(QDialog):
                 peak_q = max(q_vals, key=abs)
                 i_peak = q_vals.index(peak_q)
                 t_peak = t_vals[i_peak]
-                cum_vol_m3, total_vol_m3 = self._compute_cumulative_volume(
+                cum_vol_m3, total_vol_m3, fwd_vol_m3, rev_vol_m3 = self._compute_cumulative_volume(
                     t_vals, q_vals
                 )
 
@@ -695,6 +721,8 @@ class TimeSeriesPlotWindow(QDialog):
                         "q_vals": q_vals,
                         "cum_vol_m3": cum_vol_m3,
                         "total_vol_m3": total_vol_m3,
+                        "fwd_vol_m3": fwd_vol_m3,
+                        "rev_vol_m3": rev_vol_m3,
                         "id_val": id_val,
                         "peak_q": peak_q,
                         "t_peak": t_peak,
@@ -708,6 +736,8 @@ class TimeSeriesPlotWindow(QDialog):
                         "first_id": id_val,
                         "peak_q": peak_q,
                         "total_vol_m3": total_vol_m3,
+                        "fwd_vol_m3": fwd_vol_m3,
+                        "rev_vol_m3": rev_vol_m3,
                     }
 
         # Auto toggles based on TOTAL series count
@@ -798,12 +828,12 @@ class TimeSeriesPlotWindow(QDialog):
             t_peak = p["t_peak"]
 
             # --- NEW LEGEND RULES ---
-            # If features are all from a single layer -> legend shows ID only with Qp and V.
-            # If features span multiple layers -> legend shows "Layer • ID" with Qp and V.
+            # If features are all from a single layer -> legend shows ID only.
+            # If features span multiple layers -> legend shows "Layer • ID".
             legend_label = (
-                f"{id_val} (Qp={peak_q:.3f}, V={p['total_vol_m3']:,.0f})"
+                f"{id_val}"
                 if n_layers_involved == 1
-                else f"{lyr.name()} • {id_val} (Qp={peak_q:.3f}, V={p['total_vol_m3']:,.0f})"
+                else f"{lyr.name()} • {id_val}"
             )
             # ------------------------
 
@@ -851,9 +881,11 @@ class TimeSeriesPlotWindow(QDialog):
         if all_t:
             self._ax.set_xlim(min(all_t), max(all_t))
 
-        # Left axis baseline at 0
-        top_q = self._ax.get_ylim()[1]
-        self._ax.set_ylim(0.0, top_q)
+        # Left axis baseline at 0 or dynamic lower limit
+        bottom_q, top_q = self._ax.get_ylim()
+        if bottom_q > 0:
+            bottom_q = 0.0
+        self._ax.set_ylim(bottom_q, top_q)
         self._ax.axhline(0.0, color="#888", linewidth=0.8, alpha=0.6, zorder=0)
 
         # Right axis (Volume) — only if SINGLE series AND toggle ON
@@ -872,9 +904,11 @@ class TimeSeriesPlotWindow(QDialog):
             self._ax2.set_ylabel("Accumulated Volume (10³ m³)")
             self._ax2.grid(False)
             self._ax2.set_xlim(self._ax.get_xlim())
-            # Align baseline at 0
-            top_v = self._ax2.get_ylim()[1]
-            self._ax2.set_ylim(0.0, top_v)
+            # Align baseline at 0 or dynamic lower limit
+            bottom_v, top_v = self._ax2.get_ylim()
+            if bottom_v > 0:
+                bottom_v = 0.0
+            self._ax2.set_ylim(bottom_v, top_v)
 
         # Legend (top-left) with smaller font size
         self._ax.legend(
@@ -1085,25 +1119,32 @@ class TimeSeriesPlotWindow(QDialog):
     # --------------------- INTEGRATION ---------------------
     def _compute_cumulative_volume(
         self, t_vals: Tuple[float, ...], q_vals: Tuple[float, ...]
-    ) -> Tuple[List[float], float]:
+    ) -> Tuple[List[float], float, float, float]:
         """
         Compute accumulated volume (m³) via trapezoidal rule.
         Time in hours (per 'Time (h)'), Q in m³/s.
         V_i = 0.5*(Q[i-1]+Q[i]) * Δt_hours * 3600
-        Returns (cum_vol_series, total_volume).
+        Returns (cum_vol_series, total_volume, forward_volume, reverse_volume).
         """
         if len(t_vals) < 2:
-            return [0.0], 0.0
+            return [0.0], 0.0, 0.0, 0.0
         cum = [0.0]
         total = 0.0
+        fwd = 0.0
+        rev = 0.0
         for i in range(1, len(t_vals)):
             dt_h = t_vals[i] - t_vals[i - 1]
             if dt_h < 0:
                 continue
-            step = 0.5 * (q_vals[i - 1] + q_vals[i]) * dt_h * 3600.0  # hours→seconds
+            q_avg = 0.5 * (q_vals[i - 1] + q_vals[i])
+            step = q_avg * dt_h * 3600.0  # hours→seconds
             total += step
+            if q_avg > 0:
+                fwd += step
+            else:
+                rev += step
             cum.append(total)
-        return cum, total
+        return cum, total, fwd, rev
 
     # --------------------- AXES HOUSEKEEPING ---------------------
     def _remove_secondary_axis(self):

@@ -229,7 +229,7 @@ class PluginSettings:
         # Clear specific settings
         PluginSettings.set_model_path("")
         PluginSettings.set_style_path("")
-        PluginSettings.set_auto_apply_style(True)
+        PluginSettings.set_auto_apply_style(False)
         PluginSettings.set_style_mappings(PluginSettings._DEFAULT_STYLE_MAPPINGS)
 
         # Clear cache
@@ -258,7 +258,7 @@ class PluginSettings:
     @staticmethod
     def get_auto_apply_style() -> bool:
         """Get the auto apply style setting."""
-        val = PluginSettings._get_setting("auto_apply_style", True)
+        val = PluginSettings._get_setting("auto_apply_style", False)
         return str(val).lower() == "true" if isinstance(val, str) else bool(val)
 
     @staticmethod

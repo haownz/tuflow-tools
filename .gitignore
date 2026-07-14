@@ -7,9 +7,14 @@ __pycache__/
 
 # VS Code
 .vscode/
+*.code-workspace
 
 # Linting logs
 ruff_errors.*
 
 # AI Tools
 .continueignore
+.history/
+
+# Local Project Showcase Page
+.showcase/

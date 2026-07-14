@@ -78,7 +78,7 @@ class RestoreLayerNameAlgorithm(QgsProcessingAlgorithm):
         match = re.search(r"layername=([^|]+)", uri, re.IGNORECASE)
         if match:
             # Drop any trailing things attached to the layer name option
-            return match.group(1).split(" ")[0]
+            return match.group(1).strip()
 
         # 2. Extract base filename (fallback)
         uri_main = uri.split("|", 1)[0]

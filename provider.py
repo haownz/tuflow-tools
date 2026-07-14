@@ -22,17 +22,21 @@ from .algs.load_profile_sections import LoadProfileSectionsAlgorithm
 from .algs.cross_section_alignment import CrossSectionAlignmentAlgorithm
 from .algs.time_of_concentration import TimeOfConcentrationAlgorithm
 from .algs.gis_location import GISLocationAlgorithm
-from .algs.process_landcover import ProcessLandcoverAlgorithm
 from .algs.wse_comparison import WSEComparisonAlgorithm
 from .algs.lc_add_fields import LandCoverAddFieldsAlgorithm
 from .algs.inundation_boundary import InundationBoundaryAlgorithm
 from .algs.rasters_comparison import RastersComparisonAlgorithm
 from .algs.depth_discharge_curve import DepthDischargeCurveAlgorithm
+from .algs.clip_raster_by_depth import ClipRasterByDepthAlgorithm
 from .algs.merge_rasters import MergeRastersAlgorithm
 from .algs.mapping_csv_to_legend import MappingCSVToLegendAlgorithm
 from .algs.xmdf_output import XmdfOutputAlgorithm
 from .algs.batch_theme_export import BatchThemeExportAlgorithm
+from .algs.theme_manager import ThemeManagerAlgorithm
 from .algs.sample_rasters_grid import SampleRastersGridAlgorithm
+
+
+from .algs.extract_field_across_layers import ExtractFieldAcrossLayersAlgorithm
 
 
 class TuflowProcessingProvider(QgsProcessingProvider):
@@ -63,7 +67,6 @@ class TuflowProcessingProvider(QgsProcessingProvider):
         self.addAlgorithm(
             LandCoverAddFieldsAlgorithm()
         )  # add specialized fields to land cover
-        self.addAlgorithm(ProcessLandcoverAlgorithm())  # process land cover layer
         self.addAlgorithm(LoadGridOutputAlgorithm())  # load TUFLOW grid output wizard
         self.addAlgorithm(LoadPOLinesAlgorithm())  # load TUFLOW PO line output
         self.addAlgorithm(
@@ -93,6 +96,7 @@ class TuflowProcessingProvider(QgsProcessingProvider):
             InundationBoundaryAlgorithm()
         )  # Trace flooded footprints from depths
         self.addAlgorithm(RastersComparisonAlgorithm())  # compare generic rasters
+        self.addAlgorithm(ClipRasterByDepthAlgorithm())  # clip raster by depth
         self.addAlgorithm(DepthDischargeCurveAlgorithm())  # build a composite Q-H curve
         self.addAlgorithm(MergeRastersAlgorithm())  # merge multiple rasters into a VRT
         self.addAlgorithm(
@@ -102,4 +106,6 @@ class TuflowProcessingProvider(QgsProcessingProvider):
         self.addAlgorithm(
             BatchThemeExportAlgorithm()
         )  # batch export layout to pdf with themes
+        self.addAlgorithm(ThemeManagerAlgorithm())  # manage map themes
         self.addAlgorithm(SampleRastersGridAlgorithm())  # sample rasters at grid points
+        self.addAlgorithm(ExtractFieldAcrossLayersAlgorithm())  # extract field across layers

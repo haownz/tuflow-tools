@@ -7,7 +7,7 @@
 **A comprehensive QGIS plugin for TUFLOW hydraulic modelling — pre-processing, post-processing, and analysis.**
 
 [![QGIS](https://img.shields.io/badge/QGIS-3.22%2B-green?logo=qgis)](https://qgis.org)
-[![Version](https://img.shields.io/badge/version-1.5.0-blue)](https://github.com/haownz/tuflow-tools/releases)
+[![Version](https://img.shields.io/badge/version-1.6.2-blue)](https://github.com/haownz/tuflow-tools/releases)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-informational)]()
 
@@ -47,6 +47,7 @@
 |---|---|
 | **Flood Hazard Classify** | Classify flood hazard levels (0–3) from depth and velocity rasters |
 | **Inundation Boundary** | Trace closed polygon flood extents from a depth raster using a user-defined cutoff depth |
+| **Clip Raster by Depth** | Extract raster regions based on depth thresholds |
 | **Time of Concentration** | Calculate time of concentration using multi-layer DEM support |
 
 ### 🛠️ Pre-processing & GIS Utilities
@@ -55,9 +56,9 @@
 | **Depth Discharge Curve** | Build composite Q–H curves (orifice, weir, pipe capacity) with interactive plotting and CSV export |
 | **Merge Rasters** | Merge multiple raster files together seamlessly |
 | **Land Cover Add Fields** | Add TUFLOW-specific material and soil fields to land cover layers |
-| **Process Land Cover** | Clip, process, and merge land cover data from geodatabases for TUFLOW input |
 | **GIS Location** | Utilities for spatial referencing and coordinate location |
 | **Append Features** | Merge features between vector layers |
+| **Extract Field Across Layers** | Pull specific field values from multiple vector layers simultaneously |
 | **Batch Rename Layers** | Rename multiple map layers using pattern matching |
 | **Restore Layer Name** | Restore layer names from their source file paths |
 | **Batch Theme PDF Export** | Batch export QGIS print layouts to PDF by iterating through map themes |
@@ -72,8 +73,9 @@
 ### ⚙️ Plugin Utilities
 | Tool | Description |
 |---|---|
-| **Plugin Settings** | Configure global plugin settings and defaults |
+| **Plugin Settings** | Configure global plugin settings (supports Export/Import) |
 | **Clear Memory / File Locks** | Release memory layers and file handles locked by QGIS |
+| **Sort Layers by Name** | Sort layers in a group alphabetically (Quick Access Toolbar) |
 
 ---
 
@@ -119,35 +121,30 @@ Or search for any tool by name in the Processing Toolbox search bar.
 
 ## 📋 Changelog
 
+### Version 1.6.2 (2026-06-03)
+#### New Features
+- **Batch Theme PDF Export Atlas Support**: Added QGIS Layout Atlas support to theme-based PDF exports, enabling export loops for layout features.
+
+#### Improvements
+- **Improved Load Grid Output Algorithm**: Correctly recognizes events and version numbers from TCF filenames; allows flexible version number variations between TCF and TIF outputs.
+
+### Version 1.6.1 (2026-05-05)
+#### Improvements
+- **Refined Style Auto-Apply**: Changed auto-apply style logic to only trigger once per layer using a persistent project property.
+- **Algorithm Cleanup**: Removed the "Process Land Cover" algorithm while retaining the "Land Cover Add Fields" utility.
+
+### Version 1.6.0 (2026-04-29)
+#### New Features
+- **Settings Export/Import**: Save and load plugin configurations to external JSON files.
+- **Sort Layers by Name**: New toolbar button to sort layers in a group alphabetically.
+- **Clip Raster by Depth**: Extract raster regions based on depth thresholds.
+- **Extract Field Across Layers**: Pull specific field values from multiple vector layers.
+
 ### Version 1.5.0 (2026-04-09)
 #### New Features
 - **Batch Theme PDF Export**: Batch export QGIS print layouts to PDF by iterating through map themes.
 - **Mapping CSV to Legend**: Apply TUFLOW styling rules and legends to layers using mapping CSVs.
 - **Sample Rasters on Grid**: Sample multiple raster layers across a generated grid of points.
-- **XMDF Output**: Extract and process TUFLOW XMDF format outputs.
-
-### Version 1.4.0 (2026-03-27)
-#### New Features
-- **Depth Discharge Curve**: Build composite Q–H curves with interactive plotting and CSV export. Includes support for multiple QML fallbacks.
-- **Time of Concentration**: Added Time of Concentration algorithm with multi-layer DEM support.
-- **Merge Rasters**: Added a new tool to efficiently merge multiple raster files.
-
-#### Improvements
-- **Code Quality**: Comprehensive code formatting and linting improvements using the Ruff formatter.
-- **Privacy & Security**: Removed sensitive metadata and implemented stricter workspace ignoring.
-- **Workspace Cleanup**: Tidied up development artifacts and documentation.
-
-### Version 1.3.6 (2026-01-28)
-#### New Features
-- **Cross Sections along Alignment**
-  - Interactive side-by-side long section and cross-section viewer
-  - Draw alignment on map or select existing features
-  - Dynamic cursor tracking: red cross on map, vertical dash on long section, live cross-section profile
-  - **PDF Export**: multi-page PDF reports (3×2 grid) at user-defined chainage intervals
-  - Visual feedback: alignment direction arrow and cross-section location indicator on map
-
-#### Improvements
-- **Load Sample Points**: full refactoring with new dialog UI, checkbox layer selection, improved path handling and state persistence
 
 See [CHANGELOG.md](CHANGELOG.md) for full history.
 
@@ -176,7 +173,7 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
 ## 👤 Author
 
 **Dr. Hao Wu**  
-🐙 [@haownz](https://github.com/haownz)
+🏠 [wuhao.site](https://v.wuhao.site/) · 🐙 [@haownz](https://github.com/haownz)
 
 ---
 

@@ -3,6 +3,7 @@ import os
 import glob
 import re
 import json
+import time
 
 from qgis.PyQt.QtWidgets import (
     QWizard,
@@ -401,10 +402,10 @@ class ScenarioSelectionPage(QWizardPage):
 
         valid_struct = False
         for part in parts:
-            if re.match(r"~s\d+~", part):
+            if re.match(r"(?i)~s\d+~", part):
                 structure.append("S")
                 valid_struct = True
-            elif re.match(r"~e\d+~", part):
+            elif re.match(r"(?i)~e\d+~", part):
                 structure.append("E")
                 valid_struct = True
             else:
@@ -435,21 +436,13 @@ class ScenarioSelectionPage(QWizardPage):
         """
         scenarios = set()
         events = set()
+        # Keywords to ignore when extracting scenarios, as they are commonly present in filenames but not scenario identifiers
         ignored_keywords = {
-            "h",
-            "d",
-            "v",
-            "q",
-            "hr",
-            "max",
-            "tmax",
-            "min",
-            "avg",
-            "dem",
-            "grid",
-            "znz2",
-            "tmax_h",
-            "zaem1",
+            "h","d","v","q",
+            "hr","max","tmax","min",
+            "avg","dem","grid","tmax_h",
+            "znz2","zaem1","zud1",
+            "dt","bss","ci","rfc","ir","mb1","mb2"
         }
 
         parts = filename_str.split("_")
@@ -483,23 +476,31 @@ class ScenarioSelectionPage(QWizardPage):
                     events.add(match_found)
                     p_idx += best_len
                 else:
-                    # If expected event not found, treat token as orphan scenario and move on
+                    # Expected event not found in list, fallback to single part
                     if parts[p_idx] and parts[p_idx].lower() not in ignored_keywords:
-                        scenarios.add(parts[p_idx])
+                        events.add(parts[p_idx])
                     p_idx += 1
 
             elif isinstance(slot, tuple) and slot[0] == "L":
                 expected = slot[1]
                 # Look ahead for this constant; any skipped tokens are scenarios
                 found_at = -1
+                # Try exact match first
                 for lookahead in range(p_idx, len(parts)):
                     if parts[lookahead].lower() == expected.lower():
                         found_at = lookahead
                         break
+                
+                # If no exact match, try regex match for version/numbers
+                if found_at == -1 and re.fullmatch(r"v?\d+[a-z]?", expected, re.IGNORECASE):
+                    for lookahead in range(p_idx, len(parts)):
+                        if re.fullmatch(r"v?\d+[a-z]?", parts[lookahead], re.IGNORECASE):
+                            found_at = lookahead
+                            break
 
                 if found_at != -1:
                     for i in range(p_idx, found_at):
-                        if parts[i] and parts[i] not in ignored_keywords:
+                        if parts[i] and parts[i].lower() not in ignored_keywords:
                             scenarios.add(parts[i])
                     p_idx = found_at + 1
                 else:
@@ -815,13 +816,17 @@ class PreviewPage(QWizardPage):
 
     def init_ui(self):
         layout = QVBoxLayout()
-        self.preview_table = QTableWidget(0, 2)
-        self.preview_table.setHorizontalHeaderLabels(["Select", "Grid File"])
+        self.preview_table = QTableWidget(0, 3)
+        self.preview_table.setHorizontalHeaderLabels(["Select", "Grid File", "Modified Date"])
         self.preview_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
         self.preview_table.setColumnWidth(0, 60)
         self.preview_table.horizontalHeader().setSectionResizeMode(
             1, QHeaderView.Stretch
         )
+        self.preview_table.horizontalHeader().setSectionResizeMode(
+            2, QHeaderView.ResizeToContents
+        )
+        self.preview_table.setSortingEnabled(True)
         layout.addWidget(self.preview_table)
 
         self.empty_warning_label = QLabel(
@@ -901,20 +906,30 @@ class PreviewPage(QWizardPage):
                     _write_debug_log("\n".join(debug_lines))
 
                 self.grid_files_to_load = sorted(unique_paths)
+                self.preview_table.setSortingEnabled(False)
                 self.preview_table.setRowCount(len(self.grid_files_to_load))
 
                 for i, fpath in enumerate(self.grid_files_to_load):
                     cb = QCheckBox()
                     cb.setChecked(True)
                     self.preview_table.setCellWidget(i, 0, cb)
+                    
                     item = QTableWidgetItem(os.path.basename(fpath))
                     item.setData(Qt.UserRole, fpath)
+                    item.setFlags(item.flags() & ~Qt.ItemIsEditable)
                     self.preview_table.setItem(i, 1, item)
+                    
+                    mtime_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(os.path.getmtime(fpath)))
+                    date_item = QTableWidgetItem(mtime_str)
+                    date_item.setFlags(date_item.flags() & ~Qt.ItemIsEditable)
+                    self.preview_table.setItem(i, 2, date_item)
 
                 if len(self.grid_files_to_load) == 0:
                     self.empty_warning_label.setVisible(True)
                 else:
                     self.empty_warning_label.setVisible(False)
+                    
+                self.preview_table.setSortingEnabled(True)
 
         finally:
             self.preview_table.setUpdatesEnabled(True)

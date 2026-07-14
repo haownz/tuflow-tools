@@ -33,6 +33,10 @@ class TuflowToolsPlugin(QObject):
         self.toggle_labels_action = None
         self.duplicate_layer_action = None
         self.collapse_action = None
+        self.sort_group_action = None
+        self.theme_manager_action = None
+        self.batch_theme_export_action = None
+        self.select_layers_action = None
 
     def initGui(self):
         self.provider = TuflowProcessingProvider()
@@ -49,6 +53,18 @@ class TuflowToolsPlugin(QObject):
         self.style_action.setToolTip("Apply style to selected layers")
         self.style_action.triggered.connect(self.apply_style_to_selected)
         self.toolbar.addAction(self.style_action)
+
+        # Add Select Layers by Search button
+        self.select_layers_action = QAction(
+            QgsApplication.getThemeIcon("/mActionFilter2.svg"),
+            "Select Layers by Search",
+            self.iface.mainWindow(),
+        )
+        self.select_layers_action.setToolTip(
+            "Select layers by fuzzy search or wildcard pattern (e.g. 2d_bc* or *result*)"
+        )
+        self.select_layers_action.triggered.connect(self.run_select_layers_by_search)
+        self.toolbar.addAction(self.select_layers_action)
 
         # Add Batch Rename button
         self.rename_action = QAction(
@@ -106,14 +122,48 @@ class TuflowToolsPlugin(QObject):
         self.toolbar.addAction(self.duplicate_layer_action)
 
         # Add Collapse All Sub-layers button
+        icon_collapse_path = os.path.join(os.path.dirname(__file__), "icon_collapse.png")
+        icon_collapse = QIcon(icon_collapse_path) if os.path.exists(icon_collapse_path) else QIcon()
         self.collapse_action = QAction(
-            QgsApplication.getThemeIcon("/mActionArrowDown.svg"),
+            icon_collapse,
             "Collapse All Sub-layers",
             self.iface.mainWindow(),
         )
         self.collapse_action.setToolTip("Collapse all sub-layers and sub-groups")
         self.collapse_action.triggered.connect(self.collapse_all_sub_items)
         self.toolbar.addAction(self.collapse_action)
+
+        # Add Sort Group button
+        icon_sort_path = os.path.join(os.path.dirname(__file__), "icon_sort.png")
+        icon_sort = QIcon(icon_sort_path) if os.path.exists(icon_sort_path) else QIcon()
+        self.sort_group_action = QAction(
+            icon_sort,
+            "Sort Group",
+            self.iface.mainWindow(),
+        )
+        self.sort_group_action.setToolTip("Sort layers and sub-groups in selected group alphabetically")
+        self.sort_group_action.triggered.connect(self.sort_group_layers)
+        self.toolbar.addAction(self.sort_group_action)
+
+        # Add Theme Manager button
+        self.theme_manager_action = QAction(
+            QgsApplication.getThemeIcon("/mActionShowAllLayers.svg"),
+            "Layer Theme Manager",
+            self.iface.mainWindow(),
+        )
+        self.theme_manager_action.setToolTip("Manage map themes: list, remove, edit, and wildcard replace theme names")
+        self.theme_manager_action.triggered.connect(self.run_theme_manager)
+        self.toolbar.addAction(self.theme_manager_action)
+
+        # Add Batch Theme Export button
+        self.batch_theme_export_action = QAction(
+            QgsApplication.getThemeIcon("/mActionSaveAsPDF.svg"),
+            "Batch Theme Export",
+            self.iface.mainWindow(),
+        )
+        self.batch_theme_export_action.setToolTip("Batch export layout by map themes to PDF")
+        self.batch_theme_export_action.triggered.connect(self.run_batch_theme_export)
+        self.toolbar.addAction(self.batch_theme_export_action)
 
         # Auto-update active layer name variable and label button state
         self.iface.currentLayerChanged.connect(self._update_active_layer_name)
@@ -164,6 +214,14 @@ class TuflowToolsPlugin(QObject):
         self.toggle_labels_action.setEnabled(True)
         self.toggle_labels_action.setChecked(layer.labelsEnabled())
 
+    def run_theme_manager(self):
+        from .algs.theme_manager import show_theme_manager_dialog
+        show_theme_manager_dialog()
+
+    def run_batch_theme_export(self):
+        from .algs.batch_theme_export import show_batch_theme_export_dialog
+        show_batch_theme_export_dialog()
+
     def apply_style_to_selected(self):
         """Apply style to all currently selected layers."""
         layers = self.iface.layerTreeView().selectedLayers()
@@ -173,6 +231,10 @@ class TuflowToolsPlugin(QObject):
 
         for layer in layers:
             StyleManager.apply_style_to_layer(layer)
+
+    def run_select_layers_by_search(self):
+        from .algs.select_layers_by_search import show_select_layers_dialog
+        show_select_layers_dialog(self.iface)
 
     def run_batch_rename(self):
         processing.execAlgorithmDialog("tuflow_tools:rename_layers_by_pattern")
@@ -229,6 +291,17 @@ class TuflowToolsPlugin(QObject):
         """Duplicate the active vector layer's data source and load it."""
         from qgis.PyQt.QtWidgets import QInputDialog, QMessageBox
         from qgis.core import QgsVectorFileWriter, QgsProject, QgsVectorLayer, Qgis
+        import re
+
+        def get_default_name(current_name):
+            match = re.search(r'(?<!\d)(\d{3})([^0-9]*)$', current_name)
+            if match:
+                num_str = match.group(1)
+                suffix = match.group(2)
+                prefix = current_name[:match.start(1)]
+                next_num = int(num_str) + 1
+                return f"{prefix}{next_num:0{len(num_str)}d}{suffix}"
+            return f"{current_name}_copy"
 
         layer = self.iface.activeLayer()
         if not layer or layer.type() != Qgis.LayerType.VectorLayer:
@@ -268,12 +341,24 @@ class TuflowToolsPlugin(QObject):
                 self.iface.mainWindow(),
                 "Duplicate Layer Data",
                 "Enter new table name for GeoPackage:",
-                text=f"{layer.name()}_copy",
+                text=get_default_name(layer.name()),
             )
             if not ok or not new_name.strip():
                 return
 
             new_name = new_name.strip()
+
+            # Check if table already exists in GPKG
+            check_layer = QgsVectorLayer(f"{file_path}|layername={new_name}", "check", "ogr")
+            if check_layer.isValid():
+                ans = QMessageBox.question(
+                    self.iface.mainWindow(),
+                    "Table Exists",
+                    f"The table '{new_name}' already exists in the GeoPackage. Overwrite?",
+                    QMessageBox.Yes | QMessageBox.No,
+                )
+                if ans == QMessageBox.No:
+                    return
 
             # To avoid slow performance on NAS due to SQLite concurrent read/write locks,
             # we first export to a temporary local file, then append it to the target gpkg.
@@ -344,7 +429,7 @@ class TuflowToolsPlugin(QObject):
                     4,
                 )
 
-        else:
+        elif ext == ".shp":
             # Prompt for new file name
             base_dir = os.path.dirname(file_path)
             base_name = os.path.basename(file_path)
@@ -354,7 +439,7 @@ class TuflowToolsPlugin(QObject):
                 self.iface.mainWindow(),
                 "Duplicate Layer Data",
                 f"Enter new file name (without {current_ext} extension):",
-                text=f"{name_only}_copy",
+                text=get_default_name(name_only),
             )
 
             if not ok or not new_name.strip():
@@ -374,6 +459,8 @@ class TuflowToolsPlugin(QObject):
                     return
 
             options = QgsVectorFileWriter.SaveVectorOptions()
+            options.driverName = "ESRI Shapefile"
+            options.actionOnExistingFile = QgsVectorFileWriter.CreateOrOverwriteFile
             if hasattr(layer.dataProvider(), "encoding"):
                 options.fileEncoding = layer.dataProvider().encoding()
 
@@ -406,6 +493,14 @@ class TuflowToolsPlugin(QObject):
                     Qgis.Critical,
                     4,
                 )
+
+        else:
+            self.iface.messageBar().pushMessage(
+                "Duplicate Layer",
+                f"Unsupported file format '{ext}'. Only GPKG and SHP are supported.",
+                Qgis.Warning,
+                4,
+            )
 
     def collapse_all_sub_items(self):
         """Collapse all sub-layers and sub-groups of the selected item in the Layers panel."""
@@ -464,13 +559,73 @@ class TuflowToolsPlugin(QObject):
 
         return count
 
+    def sort_group_layers(self):
+        """Sort layers in the selected group alphabetically by name."""
+        from qgis.core import QgsLayerTreeGroup
+
+        layer_tree_view = self.iface.layerTreeView()
+        current_node = layer_tree_view.currentNode()
+
+        if not current_node:
+            self.iface.messageBar().pushMessage(
+                "Sort Group",
+                "No item selected in Layers panel",
+                Qgis.Info,
+                2,
+            )
+            return
+
+        if not isinstance(current_node, QgsLayerTreeGroup):
+            self.iface.messageBar().pushMessage(
+                "Sort Group",
+                "Selected item is not a group",
+                Qgis.Warning,
+                2,
+            )
+            return
+
+        children = current_node.children()
+        if not children:
+            return
+
+        sorted_children = sorted(children, key=lambda n: n.name().lower())
+
+        if children == sorted_children:
+            return  # Already sorted
+
+        # To prevent QGIS from auto-deleting map layers from the project when they leave the layer tree,
+        # we must insert the clones FIRST before removing the original nodes.
+        clones = [c.clone() for c in sorted_children]
+        
+        # Append the sorted clones to the end of the group
+        for c in clones:
+            current_node.addChildNode(c)
+            
+        # Safely remove the original unsorted nodes from the beginning
+        # Map layers are preserved because the clones now hold tree references
+        for child in children:
+            current_node.removeChildNode(child)
+
+        self.iface.messageBar().pushMessage(
+            "Sort Group",
+            f"Sorted {len(clones)} items alphabetically.",
+            Qgis.Success,
+            2,
+        )
+
     def _on_layers_added(self, layers):
         """Automatically apply style when layers are added to the project."""
         if not PluginSettings.get_auto_apply_style():
             return
 
         for layer in layers:
+            # Only apply style once per layer to prevent overriding manual style 
+            # changes when the project is loaded or layer is refreshed.
+            if layer.customProperty("tuflow_auto_style_applied"):
+                continue
+
             StyleManager.apply_style_to_layer(layer)
+            layer.setCustomProperty("tuflow_auto_style_applied", True)
 
     def unload(self):
         try:
